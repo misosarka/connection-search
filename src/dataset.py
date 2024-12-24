@@ -103,3 +103,7 @@ class Dataset:
             dataframe = dataframe.set_index(index)
         
         return dataframe
+
+
+    def get_stop(self, stop_id: str) -> pd.Series | pd.DataFrame:
+        return self._stops.loc[stop_id]
