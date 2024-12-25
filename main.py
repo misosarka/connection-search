@@ -1,5 +1,8 @@
 from src.dataset import Dataset
-from src.structures import Stop
 
 dataset = Dataset("data")
-print(Stop(dataset, "U305Z1P"))
+for stop in dataset.get_stops_by_asw_node_id("305"):
+    print(stop)
+
+for stop in dataset.get_stops_by_parent_station("U115S1"):
+    print(stop)

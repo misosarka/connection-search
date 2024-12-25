@@ -1,4 +1,6 @@
 import pandas as pd
+from typing import Any, Iterable
+from .structures import LocationType, Stop
 
 
 class Dataset:
@@ -20,7 +22,11 @@ class Dataset:
             "stop_name": "string",
             "location_type": "int",
             "parent_station": "string",
+            "asw_node_id": "string",
         }, "stop_id")
+
+        self._stops_by_parent_station = self._reindex(self._stops, "parent_station")
+        self._stops_by_asw_node_id = self._reindex(self._stops, "asw_node_id")
 
         self._routes = self._read_csv_file("routes", {
             "route_id": "string",
@@ -46,7 +52,7 @@ class Dataset:
             "drop_off_type": "int",
         }, ["trip_id", "stop_sequence"])
 
-        self._stop_times_by_stop = self._stop_times_by_trip.reset_index().set_index(["stop_id", "departure_time"])
+        self._stop_times_by_stop = self._reindex(self._stop_times_by_trip, ["stop_id", "departure_time"])
 
         self._calendar = self._read_csv_file("calendar", {
             "service_id": "string",
@@ -70,7 +76,7 @@ class Dataset:
 
     def _read_csv_file(self, name: str, column_types: dict[str, str], index: None | str | list[str] = None) -> pd.DataFrame:
         """
-        Reads a CSV file into a Pandas DataFrame.
+        Read a CSV file into a Pandas DataFrame.
 
         :param name: The name of the file to read, without the .txt extension.
         :param column_types: The columns to read, along with their datatypes. \
@@ -100,10 +106,70 @@ class Dataset:
         for column in convert_to_datetime:
             dataframe[column] = pd.to_datetime(dataframe[column])
         if index is not None:
-            dataframe = dataframe.set_index(index)
+            dataframe = dataframe.set_index(index).sort_index(inplace=False)
         
         return dataframe
+    
+
+    def _reindex(self, frame: pd.DataFrame, new_index: str | list[str]) -> pd.DataFrame:
+        """
+        Create a new DataFrame from an existing one, using a different column as index.
+
+        :param frame: The original DataFrame.
+        :param new_index: The column name to use as the new index, or a list of those column names.
+        :returns: A DataFrame with the new index.
+        """
+        return frame.reset_index().set_index(new_index).sort_index(inplace=False)
 
 
-    def get_stop(self, stop_id: str) -> pd.Series | pd.DataFrame:
-        return self._stops.loc[stop_id]
+    def get_stop_by_id(self, stop_id: str) -> Stop:
+        """Get a Stop object from the dataset by its stop_id."""
+        stop = self._stops.loc[stop_id]
+        return Stop(
+            _dataset=self,
+            stop_id=stop_id,
+            stop_name=_replace_na(stop["stop_name"]),
+            location_type=LocationType(stop["location_type"]),
+            parent_station=_replace_na(stop["parent_station"]),
+            asw_node_id=_replace_na(stop["asw_node_id"]),
+        )
+    
+
+    def get_stops_by_parent_station(self, parent_station_id: str) -> Iterable[Stop]:
+        """Get a list of Stop objects from the dataset whose parent station matches the specified id."""
+        def to_stop(stop: pd.Series) -> Stop:
+            return Stop(
+                _dataset=self,
+                stop_id=stop["stop_id"],
+                stop_name=_replace_na(stop["stop_name"]),
+                location_type=LocationType(stop["location_type"]),
+                parent_station=parent_station_id,
+                asw_node_id=_replace_na(stop["asw_node_id"]),
+            )
+        
+        stops = self._stops_by_parent_station.loc[parent_station_id]
+        return stops.apply(to_stop, axis=1) # type: ignore[call-overload, arg-type]
+
+
+    def get_stops_by_asw_node_id(self, asw_node_id: str) -> Iterable[Stop]:
+        """Get a list of Stop objects from the dataset by their asw_node_id."""
+        def to_stop(stop: pd.Series) -> Stop:
+            return Stop(
+                _dataset=self,
+                stop_id=stop["stop_id"],
+                stop_name=_replace_na(stop["stop_name"]),
+                location_type=LocationType(stop["location_type"]),
+                parent_station=_replace_na(stop["parent_station"]),
+                asw_node_id=asw_node_id,
+            )
+        
+        stops = self._stops_by_asw_node_id.loc[asw_node_id]
+        return stops.apply(to_stop, axis=1) # type: ignore[call-overload, arg-type]
+
+
+def _replace_na(value: pd.Series | pd.DataFrame, replace_with: Any = None) -> Any:
+    """Replace a Pandas <NA> value with a specified value (or None by default)."""
+    if pd.isna(value):
+        return replace_with
+    else:
+        return value
