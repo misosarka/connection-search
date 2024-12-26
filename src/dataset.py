@@ -1,6 +1,6 @@
 import pandas as pd
 from typing import Any, Iterable
-from .structures import LocationType, Stop
+from .structures import LocationType, MalformedGTFSError, Route, RouteType, Stop, Trip
 
 
 class Dataset:
@@ -125,6 +125,8 @@ class Dataset:
     def get_stop_by_id(self, stop_id: str) -> Stop:
         """Get a Stop object from the dataset by its stop_id."""
         stop = self._stops.loc[stop_id]
+        if isinstance(stop, pd.DataFrame):
+            raise MalformedGTFSError("stops.stop_id is not unique")
         return Stop(
             _dataset=self,
             stop_id=stop_id,
@@ -167,7 +169,35 @@ class Dataset:
         return stops.apply(to_stop, axis=1) # type: ignore[call-overload, arg-type]
 
 
-def _replace_na(value: pd.Series | pd.DataFrame, replace_with: Any = None) -> Any:
+    def get_route_by_id(self, route_id: str) -> Route:
+        """Get a Route object from the dataset by its route_id."""
+        route = self._routes.loc[route_id]
+        if isinstance(route, pd.DataFrame):
+            raise MalformedGTFSError("routes.route_id is not unique")
+        return Route(
+            _dataset=self,
+            route_id=route_id,
+            route_short_name=_replace_na(route["route_short_name"]),
+            route_long_name=_replace_na(route["route_long_name"]),
+            route_type=RouteType(route["route_type"]),
+        )
+    
+    
+    def get_trip_by_id(self, trip_id: str) -> Trip:
+        """Get a Trip object from the dataset by its trip_id."""
+        trip = self._trips.loc[trip_id]
+        if isinstance(trip, pd.DataFrame):
+            raise MalformedGTFSError("trips.trip_id is not unique")
+        return Trip(
+            _dataset=self,
+            trip_id=trip_id,
+            route_id=trip["route_id"],
+            service_id=trip["service_id"],
+            trip_short_name=_replace_na(trip["trip_short_name"]),
+        )
+
+
+def _replace_na(value: Any, replace_with: Any = None) -> Any:
     """Replace a Pandas <NA> value with a specified value (or None by default)."""
     if pd.isna(value):
         return replace_with
