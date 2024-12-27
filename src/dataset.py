@@ -1,6 +1,6 @@
 import pandas as pd
 from typing import Any, Iterable
-from .structures import LocationType, MalformedGTFSError, Route, RouteType, Stop, Trip
+from .structures import LocationType, MalformedGTFSError, PickupDropoffType, Route, RouteType, Stop, StopTime, Trip
 
 
 class Dataset:
@@ -194,6 +194,62 @@ class Dataset:
             route_id=trip["route_id"],
             service_id=trip["service_id"],
             trip_short_name=_replace_na(trip["trip_short_name"]),
+        )
+
+
+    def get_stop_times_slice_by_trip_id(self, trip_id: str) -> slice:
+        """
+        Get a slice of numeric indices where stop times for trip with the specified trip_id are located.
+        These indices are to be put into get_stop_time_by_trip_on_index().
+        """
+        location = self._stop_times_by_trip.index.get_loc(trip_id)
+        if isinstance(location, int):
+            location = slice(location, location + 1)
+        if isinstance(location, slice):
+            return location
+        raise RuntimeError("Dataset._stop_times_by_trip_id: index not properly sorted")
+    
+
+    def get_stop_times_slice_by_stop_id(self, stop_id: str) -> slice:
+        """
+        Get a slice of numeric indices where stop times for stop with the specified stop_id are located.
+        These indices are to be put into get_stop_time_by_stop_on_index().
+        """
+        location = self._stop_times_by_stop.index.get_loc(stop_id)
+        if isinstance(location, int):
+            location = slice(location, location + 1)
+        if isinstance(location, slice):
+            return location
+        raise RuntimeError("Dataset._stop_times_by_stop_id: index not properly sorted")
+    
+
+    def get_stop_time_by_trip_on_index(self, index: int) -> StopTime:
+        """Get a StopTime at a specified index received from get_stop_times_slice_by_trip_id()."""
+        stop_time = self._stop_times_by_trip.iloc[index]
+        return StopTime(
+            _dataset=self,
+            trip_id=stop_time.name[0], # type: ignore[index]
+            stop_sequence=stop_time.name[1], # type: ignore[index]
+            arrival_time=stop_time["arrival_time"],
+            departure_time=stop_time["departure_time"],
+            stop_id=stop_time["stop_id"],
+            pickup_type=PickupDropoffType(_replace_na(stop_time["pickup_type"], 0)),
+            drop_off_type=PickupDropoffType(_replace_na(stop_time["drop_off_type"], 0)),
+        )
+    
+
+    def get_stop_time_by_stop_on_index(self, index: int) -> StopTime:
+        """Get a StopTime at a specified index received from get_stop_times_slice_by_stop_id()."""
+        stop_time = self._stop_times_by_stop.iloc[index]
+        return StopTime(
+            _dataset=self,
+            trip_id=stop_time["trip_id"],
+            stop_sequence=stop_time["stop_sequence"],
+            arrival_time=stop_time["arrival_time"],
+            departure_time=stop_time.name[1], # type: ignore[index]
+            stop_id=stop_time.name[0], # type: ignore[index]
+            pickup_type=PickupDropoffType(_replace_na(stop_time["pickup_type"], 0)),
+            drop_off_type=PickupDropoffType(_replace_na(stop_time["drop_off_type"], 0)),
         )
 
 

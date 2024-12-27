@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
+import pandas as pd
 
 if TYPE_CHECKING:
     from .dataset import Dataset
@@ -100,3 +101,22 @@ class Trip:
             return f"{self.trip_short_name} ({route_short_name})"
         else:
             return route_short_name
+
+
+class PickupDropoffType(Enum):
+    REGULAR = 0
+    NOT_AVAILABLE = 1
+    PHONE_AGENCY = 2
+    COORDINATE_WITH_DRIVER = 3
+
+
+@dataclass
+class StopTime:
+    _dataset: Dataset
+    trip_id: str
+    stop_sequence: int
+    arrival_time: pd.Timedelta
+    departure_time: pd.Timedelta
+    stop_id: str
+    pickup_type: PickupDropoffType
+    drop_off_type: PickupDropoffType
