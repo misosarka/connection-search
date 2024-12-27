@@ -1,3 +1,4 @@
+from datetime import date
 import pandas as pd
 from typing import Any, Iterable
 from .structures import LocationType, MalformedGTFSError, PickupDropoffType, Route, RouteType, Stop, StopTime, Trip
@@ -250,6 +251,26 @@ class Dataset:
             stop_id=stop_time.name[0], # type: ignore[index]
             pickup_type=PickupDropoffType(_replace_na(stop_time["pickup_type"], 0)),
             drop_off_type=PickupDropoffType(_replace_na(stop_time["drop_off_type"], 0)),
+        )
+
+
+    def runs_on_day(self, service_id: str, day: date) -> bool:
+        """Returns True if the specified service_id runs on the specified date and False otherwise."""
+        timestamp = pd.Timestamp(day)
+        if (service_id, timestamp) in self._calendar_dates.index:
+            calendar_dates_record = self._calendar_dates.loc[service_id, timestamp]
+            if calendar_dates_record["exception_type"] == 1:
+                return True
+            elif calendar_dates_record["exception_type"] == 2:
+                return False
+            else:
+                raise MalformedGTFSError("calendar_dates.exception_type has invalid value")
+        weekday = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"][day.weekday()]
+        calendar_record = self._calendar.loc[service_id]
+        return (
+            day >= calendar_record["start_date"].date() and
+            day <= calendar_record["end_date"].date() and
+            calendar_record[weekday]
         )
 
 
