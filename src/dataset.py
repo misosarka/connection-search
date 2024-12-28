@@ -258,7 +258,7 @@ class Dataset:
         """Returns True if the specified service_id runs on the specified date and False otherwise."""
         timestamp = pd.Timestamp(day)
         if (service_id, timestamp) in self._calendar_dates.index:
-            calendar_dates_record = self._calendar_dates.loc[service_id, timestamp]
+            calendar_dates_record = self._calendar_dates.loc[service_id, timestamp] # type: ignore[index]
             if calendar_dates_record["exception_type"] == 1:
                 return True
             elif calendar_dates_record["exception_type"] == 2:
@@ -267,6 +267,8 @@ class Dataset:
                 raise MalformedGTFSError("calendar_dates.exception_type has invalid value")
         weekday = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"][day.weekday()]
         calendar_record = self._calendar.loc[service_id]
+        if isinstance(calendar_record, pd.DataFrame):
+            raise MalformedGTFSError("calendar.service_id is not unique")
         return (
             day >= calendar_record["start_date"].date() and
             day <= calendar_record["end_date"].date() and
