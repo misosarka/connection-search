@@ -64,7 +64,7 @@ class RouteType(Enum):
 
 @dataclass
 class Route:
-    _dataset: Dataset
+    _dataset: Dataset = field(repr=False)
     route_id: str
     route_short_name: str | None
     route_long_name: str | None
@@ -89,7 +89,7 @@ class Route:
 
 @dataclass
 class Trip:
-    _dataset: Dataset
+    _dataset: Dataset = field(repr=False)
     trip_id: str
     route_id: str
     service_id: str
@@ -102,6 +102,9 @@ class Trip:
         else:
             return route_short_name
 
+    def get_route(self) -> Route:
+        return self._dataset.get_route_by_id(self.route_id)
+
 
 class PickupDropoffType(Enum):
     REGULAR = 0
@@ -112,7 +115,7 @@ class PickupDropoffType(Enum):
 
 @dataclass
 class StopTime:
-    _dataset: Dataset
+    _dataset: Dataset = field(repr=False)
     trip_id: str
     stop_sequence: int
     arrival_time: pd.Timedelta
@@ -120,3 +123,9 @@ class StopTime:
     stop_id: str
     pickup_type: PickupDropoffType
     drop_off_type: PickupDropoffType
+
+    def get_stop(self) -> Stop:
+        return self._dataset.get_stop_by_id(self.stop_id)
+    
+    def get_trip(self) -> Trip:
+        return self._dataset.get_trip_by_id(self.trip_id)
