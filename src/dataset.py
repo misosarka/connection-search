@@ -198,17 +198,16 @@ class Dataset:
         )
 
 
-    def get_stop_times_slice_by_trip_id(self, trip_id: str) -> slice:
+    def get_index_in_stop_times_by_trip(self, trip_id: str, stop_sequence: int) -> int:
         """
-        Get a slice of numeric indices where stop times for trip with the specified trip_id are located.
-        These indices are to be put into get_stop_time_by_trip_on_index().
+        Get an index where a stop time with the specified trip_id and stop_sequence is located.
+        Subsequent indices, when put into get_stop_time_by_trip_on_index(), should return subsequent StopTimes for the trip
+        (up until the final stop).
         """
-        location = self._stop_times_by_trip.index.get_loc(trip_id)
+        location = self._stop_times_by_trip.index.get_loc((trip_id, stop_sequence))
         if isinstance(location, int):
-            location = slice(location, location + 1)
-        if isinstance(location, slice):
             return location
-        raise RuntimeError("Dataset._stop_times_by_trip_id: index not properly sorted")
+        raise MalformedGTFSError("(stop_times.trip_id, stop_times.stop_sequence) is not unique")
     
 
     def get_stop_times_slice_by_stop_id(self, stop_id: str) -> slice:
@@ -225,7 +224,8 @@ class Dataset:
     
 
     def get_stop_time_by_trip_on_index(self, index: int) -> StopTime:
-        """Get a StopTime at a specified index received from get_stop_times_slice_by_trip_id()."""
+        """Get a StopTime at a specified index in Dataset.stop_times_by_trip,
+        such as the one received from get_index_in_stop_times_by_trip()."""
         stop_time = self._stop_times_by_trip.iloc[index]
         return StopTime(
             _dataset=self,
@@ -240,7 +240,8 @@ class Dataset:
     
 
     def get_stop_time_by_stop_on_index(self, index: int) -> StopTime:
-        """Get a StopTime at a specified index received from get_stop_times_slice_by_stop_id()."""
+        """Get a StopTime at a specified index in Dataset.stop_times_by_stop,
+        such as an index in the slice received from get_stop_times_slice_by_stop_id()."""
         stop_time = self._stop_times_by_stop.iloc[index]
         return StopTime(
             _dataset=self,
@@ -274,6 +275,11 @@ class Dataset:
             day <= calendar_record["end_date"].date() and
             calendar_record[weekday]
         )
+    
+
+    @property
+    def stop_times_length(self):
+        return self._stop_times_by_trip.shape[0]
 
 
 def _replace_na(value: Any, replace_with: Any = None) -> Any:

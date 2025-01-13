@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import date, datetime, time
+from functools import total_ordering
 from .structures import Route, Stop, StopTime, Trip
 
 
@@ -62,6 +63,38 @@ class OpenTripConnectionSegment:
         return self.trip.get_route()
 
 
+@total_ordering
+@dataclass
+class ConnectionQuality:
+    """
+    A measure of quality of Connections and OpenConnections.
+
+    An empty Connection has a ConnectionQuality with first_departure=None and transfer_count=0.
+
+    Only instances with the same endpoint (stop for Connections and trip for OpenConnections) should be compared.
+    The comparison is defined as follows:
+    1. A ConnectionQuality with first_departure=None is better than any other.
+    2. The instance with the later first departure time is better (meaning its ConnectionQuality is higher).
+    3. If both instances have the same first departure time, the instance with fewer transfers is better.
+    4. If the first departure times and transfer counts are both the same, the qualities are equal.
+    """
+    
+    first_departure: datetime | None
+    transfer_count: int
+
+    def __lt__(self, other: "ConnectionQuality") -> bool:
+        # self < other => True if self has lower quality => earlier departure or higher transfer count
+        if self.first_departure is None:
+            return False
+        if other.first_departure is None:
+            return True
+        if self.first_departure < other.first_departure:
+            return True
+        if self.first_departure > other.first_departure:
+            return False
+        return self.transfer_count > other.transfer_count
+
+
 @dataclass
 class Connection:
     """A sequence of trips (todo: and transfers), starting and ending in a stop."""
@@ -81,6 +114,14 @@ class Connection:
             return None
         first_stoptime_departure = self.segments[0].start_stoptime.departure_time
         return datetime.combine(self.segments[0].service_day, MIDNIGHT) + first_stoptime_departure
+
+    @property
+    def transfer_count(self) -> int:
+        return max(len(self.segments) - 1, 0)
+    
+    @property
+    def quality(self) -> ConnectionQuality:
+        return ConnectionQuality(first_departure=self.first_departure, transfer_count=self.transfer_count)
 
 
 @dataclass
@@ -104,16 +145,10 @@ class OpenConnection:
             first_segment_service_day = self.segments[0].service_day
         return datetime.combine(first_segment_service_day, MIDNIGHT) + first_stoptime_departure
 
-
-@dataclass
-class ConnectionQuality:
-    """
-    A measure of quality of Connections and OpenConnections.
-
-    Only instances with the same endpoint (stop for Connections and trip for OpenConnections) should be compared.
-    The comparison is defined as follows:
-    1. The instance with the later first departure time is better (meaning its ConnectionQuality is higher).
-    2. If both instances have the same first departure time, the instance with fewer transfers is better.
-    3. If the first departure times and transfer counts are both the same, the qualities are equal.
-    """
-    # TODO
+    @property
+    def transfer_count(self) -> int:
+        return len(self.segments)
+    
+    @property
+    def quality(self) -> ConnectionQuality:
+        return ConnectionQuality(first_departure=self.first_departure, transfer_count=self.transfer_count)
