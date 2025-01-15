@@ -244,41 +244,41 @@ class StopVisitor(Visitor):
         self.stop_departures_slice = dataset.get_stop_times_slice_by_stop_id(self.stop.stop_id)
         arrival_time = self.next_departure.arrival_time
         time_to_search_base, time_to_search_next_day = (
-            arrival_time, arrival_time + TWENTY_FOUR_HOURS
+            (arrival_time, arrival_time + TWENTY_FOUR_HOURS)
             if arrival_time < TWENTY_FOUR_HOURS
-            else arrival_time - TWENTY_FOUR_HOURS, arrival_time
+            else (arrival_time - TWENTY_FOUR_HOURS, arrival_time)
         )
 
         start: int = self.stop_departures_slice.start
         end: int = self.stop_departures_slice.stop - 1
         while start <= end:
             middle = (start + end) // 2
-            stoptime = dataset.get_stop_time_by_stop_on_index(middle)
+            stoptime = dataset.get_stop_time_by_stop_on_index(middle).departure_time
             if stoptime < time_to_search_base:
                 start = middle + 1
             elif stoptime > time_to_search_base:
                 end = middle - 1
             else: # exact time match => need to check if this is the last one that is equal
                 if middle + 1 >= self.stop_departures_slice.stop \
-                        or dataset.get_stop_time_by_stop_on_index(middle + 1) > time_to_search_base:
+                        or dataset.get_stop_time_by_stop_on_index(middle + 1).departure_time > time_to_search_base:
                     end = middle
                     break
                 else:
                     start = middle + 1
         self.next_departure_base_idx = end
         
-        start: int = self.stop_departures_slice.start
-        end: int = self.stop_departures_slice.stop - 1
+        start = self.stop_departures_slice.start
+        end = self.stop_departures_slice.stop - 1
         while start <= end:
             middle = (start + end) // 2
-            stoptime = dataset.get_stop_time_by_stop_on_index(middle)
+            stoptime = dataset.get_stop_time_by_stop_on_index(middle).departure_time
             if stoptime < time_to_search_next_day:
                 start = middle + 1
             elif stoptime > time_to_search_next_day:
                 end = middle - 1
             else: # exact time match => need to check if this is the last one that is equal
                 if middle + 1 >= self.stop_departures_slice.stop \
-                        or dataset.get_stop_time_by_stop_on_index(middle + 1) > time_to_search_next_day:
+                        or dataset.get_stop_time_by_stop_on_index(middle + 1).departure_time > time_to_search_next_day:
                     end = middle
                     break
                 else:
