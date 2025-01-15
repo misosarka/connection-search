@@ -1,12 +1,18 @@
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from functools import total_ordering
 from abc import ABC, abstractmethod
+
+import pandas as pd
+
 from .connection import Connection, OpenConnection
-from .structures import PickupDropoffType, StopTime, Trip
+from .structures import PickupDropoffType, Stop, StopTime, Trip
 
 
 MIDNIGHT = time(0, 0)
+ONE_DAY = timedelta(days=1)
+TWENTY_FOUR_HOURS = pd.Timedelta("24 hours")
+FORTY_EIGHT_HOURS = pd.Timedelta("48 hours")
 
 
 @total_ordering
@@ -59,7 +65,7 @@ class TripVisitor(Visitor):
         If there are no more valid stops on the trip after the departure, do not create anything and return None.
         """
         visitor = TripVisitor(
-            trip=departure_stoptime._dataset.get_trip_by_id(departure_stoptime.trip_id),
+            trip=departure_stoptime.get_trip(),
             service_day=service_day,
             next_stoptime=departure_stoptime,
             next_stoptime_idx=-1
@@ -71,7 +77,7 @@ class TripVisitor(Visitor):
     def next_event(self) -> datetime:
         return datetime.combine(self.service_day, MIDNIGHT) + self.next_stoptime.arrival_time
 
-    def next(self, visited_stops: dict[str, Connection], visited_trips: dict[str, OpenConnection]) -> list["Visitor"]:
+    def next(self, visited_stops: dict[str, Connection], visited_trips: dict[str, OpenConnection]) -> list[Visitor]:
         pass # TODO
 
     def _update_next_stop(self) -> bool:
@@ -79,7 +85,7 @@ class TripVisitor(Visitor):
         Update the next_stoptime and next_stoptime_idx to refer to the next stop on this trip where passengers can get off.
         If there is no such stop, return False. Otherwise return True.
         """
-        dataset = self.next_stoptime._dataset
+        dataset = self.trip._dataset
         index = self.next_stoptime_idx
         while True:
             index += 1
@@ -100,6 +106,213 @@ class TripVisitor(Visitor):
         Searches for the initial StopTime (passed in next_stoptime) in the dataset, writes its index into next_stoptime_idx,
         calls _update_next_stop() and returns its result.
         """
-        dataset = self.next_stoptime._dataset
+        dataset = self.trip._dataset
         self.next_stoptime_idx = dataset.get_index_in_stop_times_by_trip(self.trip.trip_id, self.next_stoptime.stop_sequence)
         return self._update_next_stop()
+
+
+@dataclass
+class StopVisitor(Visitor):
+    stop: Stop
+    next_departure: StopTime
+    next_departure_time: datetime
+    stop_departures_slice: slice
+    """Slice into Dataset.stop_times_by_stop where departures for this stop are located."""
+    next_departure_base_idx: int
+    """Index after which to search for subsequent departures with times between 0:00 and 23:59."""
+    next_departure_next_day_idx: int
+    """Index after which to search for subsequent departures with times between 24:00 and 47:59."""
+
+    @classmethod
+    def create(self, arrival_stoptime: StopTime, service_day: date) -> "StopVisitor" | None:
+        """
+        Attempt to create a StopVisitor for a stop after the arrival of a trip running on a specified service day.
+        If there are no more valid trips from the stop in 24 hours, do not create anything and return None.
+        """
+        visitor = StopVisitor(
+            stop=arrival_stoptime.get_stop(),
+            next_departure=arrival_stoptime,
+            next_departure_time=datetime.combine(service_day, MIDNIGHT) + arrival_stoptime.arrival_time.to_pytimedelta(),
+            stop_departures_slice=slice(0),
+            next_departure_base_idx=-1,
+            next_departure_next_day_idx=-1
+        )
+        if not visitor._initial_find_next_departure(): # No valid departure in 24 hours
+            return None
+        return visitor
+
+    def next_event(self):
+        return self.next_departure_time
+    
+    def next(self, visited_stops: dict[str, Connection], visited_trips: dict[str, OpenConnection]) -> list[Visitor]:
+        pass # TODO
+
+    def _update_next_departure(self) -> bool:
+        """
+        Update the next_departure, next_departure_time and both indices to refer to the next departure from this stop
+        which passengers can get on. If there is no such departure in 24 hours, return False. Otherwise return True.
+
+        This function looks both in the base times (0:00 to 23:59) and next-day times (24:00 to 47:59). This is because,
+        for example, if the last stoptime is at 0:30, the next one can be at 24:40 of the previous service day.
+        Currently, only times up to 47:59 are supported.
+        """
+        base_index = self.next_departure_base_idx
+        next_day_index = self.next_departure_next_day_idx
+        today = self.next_departure_time.date()
+
+        # Search today using base times of this day
+        today_base, base_index = self._first_valid_departure(
+            index_before_start=base_index,
+            service_day=today,
+            until=TWENTY_FOUR_HOURS
+        )
+
+        # Search today using next-day times of the previous day
+        today_next_day, next_day_index = self._first_valid_departure(
+            index_before_start=next_day_index,
+            service_day=today - ONE_DAY,
+            until=FORTY_EIGHT_HOURS
+        )
+
+        # Get the earlier departure of the two if both exist, or only the one that exists
+        if today_base is not None and (
+            today_next_day is None or today_base.departure_time <= today_next_day.departure_time - TWENTY_FOUR_HOURS
+        ):
+            # Base is earlier (or they are equal), or only base exists
+            self.next_departure = today_base
+            self.next_departure_time = datetime.combine(today, MIDNIGHT) + today_base.departure_time.to_pytimedelta()
+            self.next_departure_base_idx = base_index
+            self.next_departure_next_day_idx = next_day_index - 1
+            return True
+        elif today_next_day is not None:
+            # Next-day is earlier, or only next-day exists
+            self.next_departure = today_next_day
+            self.next_departure_time = datetime.combine(today - ONE_DAY, MIDNIGHT) + today_next_day.departure_time.to_pytimedelta()
+            self.next_departure_base_idx = base_index - 1
+            self.next_departure_next_day_idx = next_day_index
+            return True
+        # None of them exist => continue and search tomorrow
+        
+        tomorrow = today + ONE_DAY
+        max_time = pd.Timedelta(self.next_departure_time - datetime.combine(today, MIDNIGHT))
+
+        # Search tomorrow using base times of that day
+        tomorrow_base, base_index_temp = self._first_valid_departure(
+            index_before_start=self.stop_departures_slice.start - 1, # Search from the start
+            service_day=tomorrow,
+            until=max_time
+        )
+
+        # Search tomorrow using next-day times of the previous day
+        tomorrow_next_day, next_day_index = self._first_valid_departure(
+            index_before_start=base_index, # Search from current base index - the end of the base times
+            service_day=tomorrow - ONE_DAY,
+            until=TWENTY_FOUR_HOURS + max_time
+        )
+
+        base_index = base_index_temp
+
+        # Get the earlier departure of the two if both exist, or only the one that exists
+        if tomorrow_base is not None and (
+            tomorrow_next_day is None or tomorrow_base.departure_time <= tomorrow_next_day.departure_time - TWENTY_FOUR_HOURS
+        ):
+            # Base is earlier (or they are equal), or only base exists
+            self.next_departure = tomorrow_base
+            self.next_departure_time = datetime.combine(tomorrow, MIDNIGHT) + tomorrow_base.departure_time.to_pytimedelta()
+            self.next_departure_base_idx = base_index
+            self.next_departure_next_day_idx = next_day_index - 1
+            return True
+        elif tomorrow_next_day is not None:
+            # Next-day is earlier, or only next-day exists
+            self.next_departure = tomorrow_next_day
+            self.next_departure_time = datetime.combine(tomorrow - ONE_DAY, MIDNIGHT) + tomorrow_next_day.departure_time.to_pytimedelta()
+            self.next_departure_base_idx = base_index - 1
+            self.next_departure_next_day_idx = next_day_index
+            return True
+        # No valid departure in the next 24 hours
+        return False
+    
+    def _initial_find_next_departure(self) -> bool:
+        """
+        Should be called after creating a new StopVisitor to find the indices into Dataset.stop_times_by_stop.
+
+        Searches for the first departure that is after the initial one (passed in next_departure).
+        Searches in both base and next-day times and sets their indices. Also sets stop_departures_slice.
+        Finally calls _update_next_departure and returns its result.
+        """
+        dataset = self.stop._dataset
+        self.stop_departures_slice = dataset.get_stop_times_slice_by_stop_id(self.stop.stop_id)
+        arrival_time = self.next_departure.arrival_time
+        time_to_search_base, time_to_search_next_day = (
+            arrival_time, arrival_time + TWENTY_FOUR_HOURS
+            if arrival_time < TWENTY_FOUR_HOURS
+            else arrival_time - TWENTY_FOUR_HOURS, arrival_time
+        )
+
+        start: int = self.stop_departures_slice.start
+        end: int = self.stop_departures_slice.stop - 1
+        while start <= end:
+            middle = (start + end) // 2
+            stoptime = dataset.get_stop_time_by_stop_on_index(middle)
+            if stoptime < time_to_search_base:
+                start = middle + 1
+            elif stoptime > time_to_search_base:
+                end = middle - 1
+            else: # exact time match => need to check if this is the last one that is equal
+                if middle + 1 >= self.stop_departures_slice.stop \
+                        or dataset.get_stop_time_by_stop_on_index(middle + 1) > time_to_search_base:
+                    end = middle
+                    break
+                else:
+                    start = middle + 1
+        self.next_departure_base_idx = end
+        
+        start: int = self.stop_departures_slice.start
+        end: int = self.stop_departures_slice.stop - 1
+        while start <= end:
+            middle = (start + end) // 2
+            stoptime = dataset.get_stop_time_by_stop_on_index(middle)
+            if stoptime < time_to_search_next_day:
+                start = middle + 1
+            elif stoptime > time_to_search_next_day:
+                end = middle - 1
+            else: # exact time match => need to check if this is the last one that is equal
+                if middle + 1 >= self.stop_departures_slice.stop \
+                        or dataset.get_stop_time_by_stop_on_index(middle + 1) > time_to_search_next_day:
+                    end = middle
+                    break
+                else:
+                    start = middle + 1
+        self.next_departure_next_day_idx = end
+
+        return self._update_next_departure()
+
+    def _first_valid_departure(
+        self,
+        index_before_start: int,
+        service_day: date,
+        until: pd.Timedelta
+    ) -> tuple[StopTime | None, int]:
+        """
+        Find the first departure after index_before_start running on service_day with a departure time earlier than
+        the specified "until" parameter. If it exists, return its StopTime and index. If it does not, return None
+        and the index of the last departure that matched by the stop_id and "until" parameter.
+
+        The service_day parameter is passed to the dataset directly. This means that, for example, if a service runs
+        on Monday at 24:30 according to the dataset, it can be returned if a Monday is passed as the service_day parameter,
+        but it will not be returned if Tuesday is passed.
+        """
+        dataset = self.stop._dataset
+        index = index_before_start
+        while True:
+            index += 1
+            if index >= dataset.stop_times_length:
+                return None, index - 1
+            next_stoptime = dataset.get_stop_time_by_stop_on_index(index)
+            if next_stoptime.stop_id != self.stop.stop_id:
+                return None, index - 1
+            if next_stoptime.departure_time >= until:
+                return None, index - 1
+            service_id = dataset.get_trip_by_id(next_stoptime.trip_id).service_id
+            if dataset.runs_on_day(service_id, service_day) and next_stoptime.pickup_type != PickupDropoffType.NOT_AVAILABLE:
+                return next_stoptime, index
