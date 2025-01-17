@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 
 import pandas as pd
 
+from .dataset import Dataset
 from .connection import Connection, OpenConnection
 from .structures import PickupDropoffType, Stop, StopTime, Trip
 
@@ -151,11 +152,31 @@ class StopVisitor(Visitor):
         """
         visitor = StopVisitor(
             stop=arrival_stoptime.get_stop(),
-            next_departure=arrival_stoptime,
+            next_departure=arrival_stoptime, # placeholder
             next_departure_time=datetime.combine(service_day, MIDNIGHT) + arrival_stoptime.arrival_time.to_pytimedelta(),
-            stop_departures_slice=slice(0),
-            next_departure_base_idx=-1,
-            next_departure_next_day_idx=-1
+            stop_departures_slice=slice(0), # placeholder
+            next_departure_base_idx=-1, # placeholder
+            next_departure_next_day_idx=-1 # placeholder
+        )
+        if not visitor._initial_find_next_departure(): # No valid departure in 24 hours
+            return None
+        return visitor
+
+    @classmethod
+    def create_at_origin(self, dataset: Dataset, origin_stop_id: str, start_time: datetime) -> "StopVisitor" | None:
+        """
+        Attempt to create a StopVisitor at the origin of the connection search.
+        If there are no valid trips from the stop in 24 hours, do not create anything and return None.
+        """
+        origin_stop = dataset.get_stop_by_id(origin_stop_id)
+        visitor = StopVisitor(
+            stop=origin_stop,
+            # It is OK to pass None here since next_departure will be set afterwards by _update_next_departure()
+            next_departure=None, # type: ignore[arg-type]
+            next_departure_time=start_time,
+            stop_departures_slice=slice(0), # placeholder
+            next_departure_base_idx=-1, # placeholder
+            next_departure_next_day_idx=-1 # placeholder
         )
         if not visitor._initial_find_next_departure(): # No valid departure in 24 hours
             return None
@@ -277,18 +298,15 @@ class StopVisitor(Visitor):
         """
         Should be called after creating a new StopVisitor to find the indices into Dataset.stop_times_by_stop.
 
-        Searches for the first departure that is after the initial one (passed in next_departure).
+        Searches for the first departure that is after the initial arrival (whose time is passed in next_departure_time).
         Searches in both base and next-day times and sets their indices. Also sets stop_departures_slice.
         Finally calls _update_next_departure and returns its result.
         """
         dataset = self.stop._dataset
         self.stop_departures_slice = dataset.get_stop_times_slice_by_stop_id(self.stop.stop_id)
-        arrival_time = self.next_departure.arrival_time
-        time_to_search_base, time_to_search_next_day = (
-            (arrival_time, arrival_time + TWENTY_FOUR_HOURS)
-            if arrival_time < TWENTY_FOUR_HOURS
-            else (arrival_time - TWENTY_FOUR_HOURS, arrival_time)
-        )
+        arrival_time = pd.Timedelta(self.next_departure_time - datetime.combine(self.next_departure_time.date(), MIDNIGHT))
+        time_to_search_base = arrival_time
+        time_to_search_next_day = arrival_time + TWENTY_FOUR_HOURS
 
         start: int = self.stop_departures_slice.start
         end: int = self.stop_departures_slice.stop - 1
