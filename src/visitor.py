@@ -78,7 +78,27 @@ class TripVisitor(Visitor):
         return datetime.combine(self.service_day, MIDNIGHT) + self.next_stoptime.arrival_time
 
     def next(self, visited_stops: dict[str, Connection], visited_trips: dict[str, OpenConnection]) -> list[Visitor]:
-        pass # TODO
+        next_stop_id = self.next_stoptime.stop_id
+        new_connection = visited_trips[self.trip.trip_id].to_connection(self.next_stoptime)
+        visitors_to_return: list[Visitor] = []
+
+        if next_stop_id in visited_stops:
+            if new_connection.quality > visited_stops[next_stop_id].quality:
+                # Found a better connection to an already visited stop - just replace it in visited_stops
+                # (no need to create a new StopVisitor - one already exists)
+                visited_stops[next_stop_id] = new_connection
+        else:
+            # Found a new stop
+            new_stop_visitor = StopVisitor.create(self.next_stoptime, self.service_day)
+            if new_stop_visitor is not None:
+                visitors_to_return.append(new_stop_visitor)
+                visited_stops[next_stop_id] = new_connection
+
+        if self._update_next_stop():
+            # There are still more stops on this trip
+            visitors_to_return.append(self)
+
+        return visitors_to_return
 
     def _update_next_stop(self) -> bool:
         """
@@ -145,7 +165,28 @@ class StopVisitor(Visitor):
         return self.next_departure_time
     
     def next(self, visited_stops: dict[str, Connection], visited_trips: dict[str, OpenConnection]) -> list[Visitor]:
-        pass # TODO
+        next_trip_id = self.next_departure.trip_id
+        next_trip_service_day = (self.next_departure_time - self.next_departure.departure_time).date()
+        new_connection = visited_stops[self.stop.stop_id].to_open_connection(self.next_departure, next_trip_service_day)
+        visitors_to_return: list[Visitor] = []
+
+        if next_trip_id in visited_trips:
+            if new_connection.quality > visited_trips[next_trip_id].quality:
+                # Found a better connection to an already visited trip - just replace it in visited_trips
+                # (no need to create a new TripVisitor - one already exists)
+                visited_trips[next_trip_id] = new_connection
+        else:
+            # Found a new trip
+            new_trip_visitor = TripVisitor.create(self.next_departure, next_trip_service_day)
+            if new_trip_visitor is not None:
+                visitors_to_return.append(new_trip_visitor)
+                visited_trips[next_trip_id] = new_connection
+        
+        if self._update_next_departure():
+            # There are still more departures from this stop
+            visitors_to_return.append(self)
+        
+        return visitors_to_return
 
     def _update_next_departure(self) -> bool:
         """
