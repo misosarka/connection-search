@@ -60,7 +60,7 @@ class TripVisitor(Visitor):
     next_stoptime_idx: int
 
     @classmethod
-    def create(cls, departure_stoptime: StopTime, service_day: date) -> "TripVisitor" | None:
+    def create(cls, departure_stoptime: StopTime, service_day: date) -> "TripVisitor | None":
         """
         Attempt to create a TripVisitor for a trip starting with the specified departure and running on a specified service day.
         If there are no more valid stops on the trip after the departure, do not create anything and return None.
@@ -145,7 +145,7 @@ class StopVisitor(Visitor):
     """Index after which to search for subsequent departures with times between 24:00 and 47:59."""
 
     @classmethod
-    def create(self, arrival_stoptime: StopTime, service_day: date) -> "StopVisitor" | None:
+    def create(self, arrival_stoptime: StopTime, service_day: date) -> "StopVisitor | None":
         """
         Attempt to create a StopVisitor for a stop after the arrival of a trip running on a specified service day.
         If there are no more valid trips from the stop in 24 hours, do not create anything and return None.
@@ -163,7 +163,7 @@ class StopVisitor(Visitor):
         return visitor
 
     @classmethod
-    def create_at_origin(self, dataset: Dataset, origin_stop_id: str, start_time: datetime) -> "StopVisitor" | None:
+    def create_at_origin(self, dataset: Dataset, origin_stop_id: str, start_time: datetime) -> "StopVisitor | None":
         """
         Attempt to create a StopVisitor at the origin of the connection search.
         If there are no valid trips from the stop in 24 hours, do not create anything and return None.
@@ -244,13 +244,13 @@ class StopVisitor(Visitor):
             self.next_departure = today_base
             self.next_departure_time = datetime.combine(today, MIDNIGHT) + today_base.departure_time.to_pytimedelta()
             self.next_departure_base_idx = base_index
-            self.next_departure_next_day_idx = next_day_index - 1
+            self.next_departure_next_day_idx = (next_day_index - 1) if today_next_day is not None else next_day_index
             return True
         elif today_next_day is not None:
             # Next-day is earlier, or only next-day exists
             self.next_departure = today_next_day
             self.next_departure_time = datetime.combine(today - ONE_DAY, MIDNIGHT) + today_next_day.departure_time.to_pytimedelta()
-            self.next_departure_base_idx = base_index - 1
+            self.next_departure_base_idx = (base_index - 1) if today_base is not None else base_index
             self.next_departure_next_day_idx = next_day_index
             return True
         # None of them exist => continue and search tomorrow
@@ -282,13 +282,13 @@ class StopVisitor(Visitor):
             self.next_departure = tomorrow_base
             self.next_departure_time = datetime.combine(tomorrow, MIDNIGHT) + tomorrow_base.departure_time.to_pytimedelta()
             self.next_departure_base_idx = base_index
-            self.next_departure_next_day_idx = next_day_index - 1
+            self.next_departure_next_day_idx = (next_day_index - 1) if tomorrow_next_day is not None else next_day_index
             return True
         elif tomorrow_next_day is not None:
             # Next-day is earlier, or only next-day exists
             self.next_departure = tomorrow_next_day
             self.next_departure_time = datetime.combine(tomorrow - ONE_DAY, MIDNIGHT) + tomorrow_next_day.departure_time.to_pytimedelta()
-            self.next_departure_base_idx = base_index - 1
+            self.next_departure_base_idx = (base_index - 1) if tomorrow_base is not None else base_index
             self.next_departure_next_day_idx = next_day_index
             return True
         # No valid departure in the next 24 hours
