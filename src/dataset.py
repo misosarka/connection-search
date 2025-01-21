@@ -277,6 +277,11 @@ class Dataset:
         )
     
 
+    def get_all_stop_ids_and_names(self) -> Iterable[tuple[str, str]]:
+        """For every stop, return a tuple (stop_id, stop_name)."""
+        return [(stop_id, stop_name) for (stop_id, stop_name) in zip(self._stops.index, self._stops["stop_name"])]
+    
+
     @property
     def stop_times_length(self):
         return self._stop_times_by_trip.shape[0]
