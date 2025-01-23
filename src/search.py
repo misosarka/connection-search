@@ -14,8 +14,8 @@ SEARCH_TIME_LIMIT = timedelta(hours=24)
 @dataclass
 class SearchParams:
     """Represents all the parameters the user can set when searching for a connection."""
-    origin_stop_id: str
-    destination_stop_id: str
+    origin_stop_ids: list[str]
+    destination_stop_ids: list[str]
     departure: datetime
 
 
@@ -34,22 +34,30 @@ def search(params: SearchParams, dataset: Dataset) -> SearchResult:
     visited_stops: dict[str, Connection] = {}
     visited_trips: dict[str, OpenConnection] = {}
     time_limit = params.departure + SEARCH_TIME_LIMIT
-    destination = params.destination_stop_id
+    destinations = params.destination_stop_ids
 
-    origin_visitor = StopVisitor.create_at_origin(dataset, params.origin_stop_id, params.departure)
-    if origin_visitor is None:
-        # No valid departures from the origin stop in 24 hours
-        return SearchResult(connection=None)
-    queue.put(origin_visitor)
-    visited_stops[params.origin_stop_id] = Connection.empty()
+    for origin_stop_id in params.origin_stop_ids:
+        origin_visitor = StopVisitor.create_at_origin(dataset, origin_stop_id, params.departure)
+        if origin_visitor is not None:
+            queue.put(origin_visitor)
+            visited_stops[origin_stop_id] = Connection.empty()
 
+    previous_time = params.departure
     while not queue.empty():
         visitor = queue.get()
-        if visitor.next_event() > time_limit:
-            break
+        if visitor.next_event() > previous_time:
+            # Time has incremented, check if we have found a connection or passed the time limit
+            previous_time = visitor.next_event()
+            found_connections: list[Connection] = []
+            for destination in destinations:
+                if destination in visited_stops:
+                    found_connections.append(visited_stops[destination])
+            if found_connections:
+                best_connection = max(found_connections, key=lambda conn: conn.quality)
+                return SearchResult(connection=best_connection)
+            if previous_time > time_limit:
+                break
         new_visitors = visitor.next(visited_stops, visited_trips)
-        if destination in visited_stops:
-            return SearchResult(connection=visited_stops[destination])
         for new_visitor in new_visitors:
             queue.put(new_visitor)
     

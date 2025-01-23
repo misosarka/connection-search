@@ -215,7 +215,10 @@ class Dataset:
         Get a slice of numeric indices where stop times for stop with the specified stop_id are located.
         These indices are to be put into get_stop_time_by_stop_on_index().
         """
-        location = self._stop_times_by_stop.index.get_loc(stop_id)
+        try:
+            location = self._stop_times_by_stop.index.get_loc(stop_id)
+        except KeyError:
+            return slice(0, 0)
         if isinstance(location, int):
             location = slice(location, location + 1)
         if isinstance(location, slice):
@@ -279,7 +282,11 @@ class Dataset:
 
     def get_all_stop_ids_and_names(self) -> Iterable[tuple[str, str]]:
         """For every stop, return a tuple (stop_id, stop_name)."""
-        return [(stop_id, stop_name) for (stop_id, stop_name) in zip(self._stops.index, self._stops["stop_name"])]
+        return ((stop_id, stop_name) for (stop_id, stop_name, location_type) in (
+            (stop_id, _replace_na(stop_name), LocationType(location_type)) for (stop_id, stop_name, location_type) in zip(
+                self._stops.index, self._stops["stop_name"], self._stops["location_type"]
+            )
+        ) if stop_name != None and location_type == LocationType.STOP_OR_PLATFORM)
     
 
     @property

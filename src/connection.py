@@ -35,6 +35,14 @@ class TripConnectionSegment:
         return self.end_stoptime.get_stop()
     
     @property
+    def start_departure(self) -> datetime:
+        return datetime.combine(self.service_day, MIDNIGHT) + self.start_stoptime.departure_time
+    
+    @property
+    def end_arrival(self) -> datetime:
+        return datetime.combine(self.service_day, MIDNIGHT) + self.end_stoptime.arrival_time
+    
+    @property
     def route(self) -> Route:
         return self.trip.get_route()
 
@@ -57,6 +65,10 @@ class OpenTripConnectionSegment:
     @property
     def start_stop(self) -> Stop:
         return self.start_stoptime.get_stop()
+    
+    @property
+    def start_departure(self) -> datetime:
+        return datetime.combine(self.service_day, MIDNIGHT) + self.start_stoptime.departure_time
     
     @property
     def route(self) -> Route:
@@ -112,8 +124,13 @@ class Connection:
     def first_departure(self) -> datetime | None:
         if not self.segments:
             return None
-        first_stoptime_departure = self.segments[0].start_stoptime.departure_time
-        return datetime.combine(self.segments[0].service_day, MIDNIGHT) + first_stoptime_departure
+        return self.segments[0].start_departure
+    
+    @property
+    def last_arrival(self) -> datetime | None:
+        if not self.segments:
+            return None
+        return self.segments[-1].end_arrival
 
     @property
     def transfer_count(self) -> int:
@@ -138,12 +155,9 @@ class OpenConnection:
     @property
     def first_departure(self) -> datetime:
         if not self.segments:
-            first_stoptime_departure = self.final_segment.start_stoptime.departure_time
-            first_segment_service_day = self.final_segment.service_day
+            return self.final_segment.start_departure
         else:
-            first_stoptime_departure = self.segments[0].start_stoptime.departure_time
-            first_segment_service_day = self.segments[0].service_day
-        return datetime.combine(first_segment_service_day, MIDNIGHT) + first_stoptime_departure
+            return self.segments[0].start_departure
 
     @property
     def transfer_count(self) -> int:
