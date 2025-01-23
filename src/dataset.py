@@ -1,4 +1,5 @@
 from datetime import date
+from functools import cache
 import pandas as pd
 from typing import Any, Iterable
 from .structures import LocationType, MalformedGTFSError, PickupDropoffType, Route, RouteType, Stop, StopTime, Trip
@@ -73,6 +74,8 @@ class Dataset:
             "date": "datetime",
             "exception_type": "int",
         }, ["service_id", "date"])
+
+        self.stop_times_length = self._stop_times_by_trip.shape[0]
 
 
     def _read_csv_file(self, name: str, column_types: dict[str, str], index: None | str | list[str] = None) -> pd.DataFrame:
@@ -258,6 +261,7 @@ class Dataset:
         )
 
 
+    @cache
     def runs_on_day(self, service_id: str, day: date) -> bool:
         """Returns True if the specified service_id runs on the specified date and False otherwise."""
         timestamp = pd.Timestamp(day)
@@ -287,11 +291,6 @@ class Dataset:
                 self._stops.index, self._stops["stop_name"], self._stops["location_type"]
             )
         ) if stop_name != None and location_type == LocationType.STOP_OR_PLATFORM)
-    
-
-    @property
-    def stop_times_length(self):
-        return self._stop_times_by_trip.shape[0]
 
 
 def _replace_na(value: Any, replace_with: Any = None) -> Any:

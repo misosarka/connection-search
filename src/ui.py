@@ -6,6 +6,10 @@ from typing import Iterable
 from .search import SearchParams, SearchResult, search
 from .dataset import Dataset
 
+PROFILE = False
+
+if PROFILE:
+    from cProfile import Profile
 
 @dataclass
 class StopTrieNode:
@@ -93,8 +97,13 @@ class Ui:
         while True:
             print()
             params = self._request_search_params()
-            print("Zahajuji vyhledávání...")
-            result = search(params, self.dataset)
+            print("Probíhá vyhledávání...")
+            if PROFILE:
+                with Profile() as prof:
+                    result = search(params, self.dataset)
+                prof.dump_stats("profile.prof")
+            else:
+                result = search(params, self.dataset)
             print("Vyhledávání dokončeno.")
             print()
             self._display_result(result)
