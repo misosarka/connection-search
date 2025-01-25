@@ -2,14 +2,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from dateutil.parser import parse, ParserError
 from typing import Iterable
+from cProfile import Profile
 
 from .search import SearchParams, SearchResult, search
 from .dataset import Dataset
 
-PROFILE = False
-
-if PROFILE:
-    from cProfile import Profile
 
 @dataclass
 class StopTrieNode:
@@ -98,7 +95,7 @@ class Ui:
             print()
             params = self._request_search_params()
             print("Probíhá vyhledávání...")
-            if PROFILE:
+            if self.dataset.config["PROFILE"]:
                 with Profile() as prof:
                     result = search(params, self.dataset)
                 prof.dump_stats("profile.prof")

@@ -10,14 +10,14 @@ class Dataset:
     An interface with the GTFS dataset.
     """
 
-    def __init__(self, dataset_path: str) -> None:
+    def __init__(self, config: dict[str, Any]) -> None:
         """
         Construct a Dataset object from a folder with a GTFS dataset.
 
         :param dataset_path: Path to the dataset folder.
         """
 
-        self._dataset_path = dataset_path
+        self.config = config
 
         self._stops = self._read_csv_file("stops", {
             "stop_id": "string",
@@ -99,8 +99,9 @@ class Dataset:
                 convert_to_datetime.append(column)
                 column_types[column] = "string"
         
+        dataset_path = self.config["DATASET_PATH"]
         dataframe = pd.read_csv(
-            f"{self._dataset_path}/{name}.txt",
+            f"{dataset_path}/{name}.txt",
             usecols=list(column_types.keys()),
             dtype=column_types
         )

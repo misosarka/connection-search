@@ -7,10 +7,6 @@ from .visitor import StopVisitor, Visitor
 from .connection import Connection, OpenConnection
 
 
-SEARCH_TIME_LIMIT = timedelta(hours=24)
-"""The maximum time the algorithm will search through before giving up."""
-
-
 @dataclass
 class SearchParams:
     """Represents all the parameters the user can set when searching for a connection."""
@@ -33,7 +29,7 @@ def search(params: SearchParams, dataset: Dataset) -> SearchResult:
     queue: PriorityQueue[Visitor] = PriorityQueue()
     visited_stops: dict[str, Connection] = {}
     visited_trips: dict[str, OpenConnection] = {}
-    time_limit = params.departure + SEARCH_TIME_LIMIT
+    time_limit = params.departure + timedelta(hours=dataset.config["MAX_SEARCH_TIME_HOURS"])
     destinations = params.destination_stop_ids
 
     for origin_stop_id in params.origin_stop_ids:
