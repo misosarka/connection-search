@@ -182,7 +182,7 @@ class StopVisitor(Visitor):
             return None
         return visitor
 
-    def next_event(self):
+    def next_event(self) -> datetime:
         return self.next_departure_time
     
     def next(self, visited_stops: dict[str, Connection], visited_trips: dict[str, OpenConnection]) -> list[Visitor]:
@@ -375,3 +375,38 @@ class StopVisitor(Visitor):
             service_id = dataset.get_trip_by_id(next_stoptime.trip_id).service_id
             if dataset.runs_on_day(service_id, service_day) and next_stoptime.pickup_type != PickupDropoffType.NOT_AVAILABLE:
                 return next_stoptime, index
+
+
+@dataclass
+class TransferVisitor(Visitor):
+    target_stop_id: str
+    transfer_end_time: datetime
+    connection: Connection
+    """
+    Unlike TripVisitors and StopVisitors, TransferVisitors have their connection saved inside them, which ensures that it cannot
+    be modified in the middle of the transfer.
+    """
+
+    @staticmethod
+    def create_all(origin_stop: Stop, arrival_time: datetime, connection: Connection) -> list["TransferVisitor"]:
+        """Find all transfers that can be realised from a stop and create a TransferVisitor for each of them."""
+        dataset = origin_stop._dataset
+        match dataset.config["TRANSFER_MODE"]:
+            case "by_asw_node_id":
+                if origin_stop.asw_node_id is None:
+                    return []
+                stops = dataset.get_stops_by_asw_node_id(origin_stop.asw_node_id)
+                transfer_end_time = arrival_time + timedelta(minutes=dataset.config["MIN_TRANSFER_TIME"])
+                return [TransferVisitor(
+                    target_stop_id=stop.stop_id,
+                    transfer_end_time=transfer_end_time,
+                    connection=connection
+                ) for stop in stops]
+            case _: # either "none" or some invalid/unsupported value
+                return []
+    
+    def next_event(self) -> datetime:
+        return self.transfer_end_time
+    
+    def next(self, visited_stops: dict[str, Connection], visited_trips: dict[str, OpenConnection]) -> list[Visitor]:
+        pass # TODO
