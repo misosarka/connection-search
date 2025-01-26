@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from functools import total_ordering
-from .structures import Route, Stop, StopTime, Trip
+from .structures import Route, Stop, StopTime, Transfer, Trip
 
 
 MIDNIGHT = time(0, 0)
@@ -75,6 +75,23 @@ class OpenTripConnectionSegment:
         return self.trip.get_route()
 
 
+@dataclass
+class TransferConnectionSegment:
+    """A single segment of a connection representing a single transfer between two stops."""
+
+    transfer: Transfer
+    start_departure: datetime
+    end_arrival: datetime
+
+    @property
+    def start_stop(self) -> Stop:
+        return self.transfer.get_from_stop()
+    
+    @property
+    def end_stop(self) -> Stop:
+        return self.transfer.get_to_stop()
+
+
 @total_ordering
 @dataclass
 class ConnectionQuality:
@@ -111,7 +128,7 @@ class ConnectionQuality:
 class Connection:
     """A sequence of trips (todo: and transfers), starting and ending in a stop."""
 
-    segments: list[TripConnectionSegment]
+    segments: list[TripConnectionSegment | TransferConnectionSegment]
 
     @classmethod
     def empty(cls) -> "Connection":
@@ -119,6 +136,9 @@ class Connection:
     
     def to_open_connection(self, last_departure: StopTime, last_departure_service_day: date) -> "OpenConnection":
         return OpenConnection(self.segments, OpenTripConnectionSegment(last_departure, last_departure_service_day))
+    
+    def with_transfer(self, transfer: Transfer, start_departure: datetime, end_arrival: datetime) -> "Connection":
+        return Connection(self.segments + [TransferConnectionSegment(transfer, start_departure, end_arrival)])
     
     @property
     def first_departure(self) -> datetime | None:
@@ -134,7 +154,8 @@ class Connection:
 
     @property
     def transfer_count(self) -> int:
-        return max(len(self.segments) - 1, 0)
+        trip_segments = sum(1 for segment in self.segments if isinstance(segment, TripConnectionSegment))
+        return max(trip_segments - 1, 0)
     
     @property
     def quality(self) -> ConnectionQuality:
@@ -145,7 +166,7 @@ class Connection:
 class OpenConnection:
     """A sequence of trips (todo: and transfers), starting in a stop and ending on a trip."""
 
-    segments: list[TripConnectionSegment]
+    segments: list[TripConnectionSegment | TransferConnectionSegment]
     final_segment: OpenTripConnectionSegment
 
     def to_connection(self, last_arrival: StopTime) -> Connection:
@@ -161,7 +182,7 @@ class OpenConnection:
 
     @property
     def transfer_count(self) -> int:
-        return len(self.segments)
+        return sum(1 for segment in self.segments if isinstance(segment, TripConnectionSegment))
     
     @property
     def quality(self) -> ConnectionQuality:

@@ -158,20 +158,13 @@ class Dataset:
         return stops.apply(to_stop, axis=1) # type: ignore[call-overload, arg-type]
 
 
-    def get_stops_by_asw_node_id(self, asw_node_id: str) -> Iterable[Stop]:
-        """Get a list of Stop objects from the dataset by their asw_node_id."""
-        def to_stop(stop: pd.Series) -> Stop:
-            return Stop(
-                _dataset=self,
-                stop_id=stop["stop_id"],
-                stop_name=_replace_na(stop["stop_name"]),
-                location_type=LocationType(stop["location_type"]),
-                parent_station=_replace_na(stop["parent_station"]),
-                asw_node_id=asw_node_id,
-            )
-        
-        stops = self._stops_by_asw_node_id.loc[asw_node_id]
-        return stops.apply(to_stop, axis=1) # type: ignore[call-overload, arg-type]
+    def get_stop_ids_by_asw_node_id(self, asw_node_id: str) -> Iterable[str]:
+        """Get a list of stop_ids of stops in the dataset by their asw_node_id."""
+        stops = self._stops_by_asw_node_id.loc[asw_node_id, "stop_id"]
+        if isinstance(stops, pd.Series):
+            return stops
+        else:
+            return [stops] # type: ignore[list-item]
 
 
     def get_route_by_id(self, route_id: str) -> Route:

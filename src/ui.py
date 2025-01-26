@@ -4,6 +4,8 @@ from dateutil.parser import parse, ParserError
 from typing import Iterable
 from cProfile import Profile
 
+from .structures import TransferType
+from .connection import TransferConnectionSegment
 from .search import SearchParams, SearchResult, search
 from .dataset import Dataset
 
@@ -145,15 +147,24 @@ class Ui:
             transfer_count_str = "bez přestupu"
         print(f"Spojení: {transfer_count_str}, celkem {self._format_timedelta(total_time)}")
         for segment in result.connection.segments:
-            transport_type = str(segment.route.route_type).capitalize()
-            trip_name = segment.trip.get_trip_name()
             start_stop = segment.start_stop.stop_name
             start_departure = self._format_datetime(segment.start_departure)
             end_stop = segment.end_stop.stop_name
             end_arrival = self._format_datetime(segment.end_arrival)
-            print(f"\t{transport_type} {trip_name}")
-            print(f"\t\t{start_departure} {start_stop}")
-            print(f"\t\t{end_arrival} {end_stop}")
+            if isinstance(segment, TransferConnectionSegment):
+                match segment.transfer.transfer_type:
+                    case TransferType.BY_TRANSFERS_GUARANTEED:
+                        print("\tPěší přesun: garantovaný přestup")
+                    case TransferType.BY_TRANSFERS_TIMED:
+                        print(f"\tPěší přesun: cca {segment.transfer.transfer_time} min")
+                    case _:
+                        print("\tPěší přesun")
+            else:
+                transport_type = str(segment.route.route_type).capitalize()
+                trip_name = segment.trip.get_trip_name()
+                print(f"\t{transport_type} {trip_name}")
+                print(f"\t\t{start_departure} {start_stop}")
+                print(f"\t\t{end_arrival} {end_stop}")
 
     def _ask_for_stop(self, prompt: str) -> tuple[str, list[str]]:
         while True:

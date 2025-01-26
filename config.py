@@ -14,7 +14,7 @@ CONFIG = {
     # with the lowest specificity (just from_stop_id and to_stop_id) are supported. The minimum time is then the value of the field
     # transfers.min_transfer_time or the constant MIN_TRANSFER_TIME, whichever is higher.
     # - "none": No transfers between stops are possible.
-    "TRANSFER_MODE": "none",
+    "TRANSFER_MODE": "by_asw_node_id",
 
     # The minimum time needed for a transfer between two stops in the same station/area. For more information, see TRANSFER_MODE.
     "MIN_TRANSFER_TIME": 3,

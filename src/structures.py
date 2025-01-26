@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 import pandas as pd
 
 if TYPE_CHECKING:
@@ -28,6 +28,22 @@ class Stop:
     location_type: LocationType
     parent_station: str | None
     asw_node_id: str | None
+
+    def get_all_transfers(self) -> Iterable[Transfer]:
+        match self._dataset.config["TRANSFER_MODE"]:
+            case "by_asw_node_id":
+                if self.asw_node_id is None:
+                    return []
+                target_stop_ids = self._dataset.get_stop_ids_by_asw_node_id(self.asw_node_id)
+                return (Transfer(
+                    _dataset=self._dataset,
+                    from_stop_id=self.stop_id,
+                    to_stop_id=target_stop_id,
+                    transfer_type=TransferType.BY_ASW_NODE_ID,
+                    transfer_time=self._dataset.config["MIN_TRANSFER_TIME"]
+                ) for target_stop_id in target_stop_ids if target_stop_id != self.stop_id)
+            case _: # either "none" or some invalid/unsupported value
+                return []
 
 
 class RouteType(Enum):
@@ -129,3 +145,29 @@ class StopTime:
     
     def get_trip(self) -> Trip:
         return self._dataset.get_trip_by_id(self.trip_id)
+
+
+class TransferType(Enum):
+    BY_TRANSFERS_UNTIMED = 0
+    BY_TRANSFERS_GUARANTEED = 1
+    BY_TRANSFERS_TIMED = 2
+    BY_TRANSFERS_PROHIBITED = 3
+    BY_TRANSFERS_INSEAT = 4
+    BY_TRANSFERS_REBOARD = 5
+    BY_ASW_NODE_ID = -1
+    BY_PARENT_STATION = -2
+
+
+@dataclass
+class Transfer:
+    _dataset: Dataset = field(repr=False)
+    from_stop_id: str
+    to_stop_id: str
+    transfer_type: TransferType
+    transfer_time: int
+
+    def get_from_stop(self) -> Stop:
+        return self._dataset.get_stop_by_id(self.from_stop_id)
+    
+    def get_to_stop(self) -> Stop:
+        return self._dataset.get_stop_by_id(self.to_stop_id)

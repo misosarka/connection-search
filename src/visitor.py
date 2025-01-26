@@ -2,12 +2,13 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from functools import total_ordering
 from abc import ABC, abstractmethod
+from typing import Iterable
 
 import pandas as pd
 
 from .dataset import Dataset
-from .connection import Connection, OpenConnection
-from .structures import PickupDropoffType, Stop, StopTime, Trip
+from .connection import Connection, OpenConnection, TransferConnectionSegment
+from .structures import PickupDropoffType, Stop, StopTime, Transfer, Trip
 
 
 MIDNIGHT = time(0, 0)
@@ -82,18 +83,28 @@ class TripVisitor(Visitor):
         next_stop_id = self.next_stoptime.stop_id
         new_connection = visited_trips[self.trip.trip_id].to_connection(self.next_stoptime)
         visitors_to_return: list[Visitor] = []
+        add_transfers = False
 
         if next_stop_id in visited_stops:
             if new_connection.quality > visited_stops[next_stop_id].quality:
                 # Found a better connection to an already visited stop - just replace it in visited_stops
                 # (no need to create a new StopVisitor - one already exists)
                 visited_stops[next_stop_id] = new_connection
+                add_transfers = True
         else:
             # Found a new stop
             new_stop_visitor = StopVisitor.create(self.next_stoptime, self.service_day)
             if new_stop_visitor is not None:
                 visitors_to_return.append(new_stop_visitor)
                 visited_stops[next_stop_id] = new_connection
+            add_transfers = True
+        
+        if add_transfers:
+            visitors_to_return.extend(TransferVisitor.create_all(
+                self.next_stoptime.get_stop(),
+                self.next_event(),
+                new_connection
+            ))
 
         if self._update_next_stop():
             # There are still more stops on this trip
@@ -145,12 +156,12 @@ class StopVisitor(Visitor):
     """Index after which to search for subsequent departures with times between 24:00 and 47:59."""
 
     @classmethod
-    def create(self, arrival_stoptime: StopTime, service_day: date) -> "StopVisitor | None":
+    def create(cls, arrival_stoptime: StopTime, service_day: date) -> "StopVisitor | None":
         """
         Attempt to create a StopVisitor for a stop after the arrival of a trip running on a specified service day.
         If there are no more valid trips from the stop in 24 hours, do not create anything and return None.
         """
-        visitor = StopVisitor(
+        visitor = cls(
             stop=arrival_stoptime.get_stop(),
             next_departure=arrival_stoptime, # placeholder
             next_departure_time=datetime.combine(service_day, MIDNIGHT) + arrival_stoptime.arrival_time.to_pytimedelta(),
@@ -163,14 +174,34 @@ class StopVisitor(Visitor):
         return visitor
 
     @classmethod
-    def create_at_origin(self, dataset: Dataset, origin_stop_id: str, start_time: datetime) -> "StopVisitor | None":
+    def create_at_origin(cls, dataset: Dataset, origin_stop_id: str, start_time: datetime) -> "StopVisitor | None":
         """
         Attempt to create a StopVisitor at the origin of the connection search.
         If there are no valid trips from the stop in 24 hours, do not create anything and return None.
         """
         origin_stop = dataset.get_stop_by_id(origin_stop_id)
-        visitor = StopVisitor(
+        visitor = cls(
             stop=origin_stop,
+            # It is OK to pass None here since next_departure will be set afterwards by _update_next_departure()
+            next_departure=None, # type: ignore[arg-type]
+            next_departure_time=start_time,
+            stop_departures_slice=slice(0), # placeholder
+            next_departure_base_idx=-1, # placeholder
+            next_departure_next_day_idx=-1 # placeholder
+        )
+        if not visitor._initial_find_next_departure(): # No valid departure in 24 hours
+            return None
+        return visitor
+
+    @classmethod
+    def create_from_transfer(cls, transfer: Transfer, start_time: datetime) -> "StopVisitor | None":
+        """
+        Attempt to create a StopVisitor at the end of the specified transfer.
+        If there are no valid trips from the stop in 24 hours, do not create anything and return None.
+        """
+        stop = transfer.get_to_stop()
+        visitor = cls(
+            stop=stop,
             # It is OK to pass None here since next_departure will be set afterwards by _update_next_departure()
             next_departure=None, # type: ignore[arg-type]
             next_departure_time=start_time,
@@ -379,7 +410,8 @@ class StopVisitor(Visitor):
 
 @dataclass
 class TransferVisitor(Visitor):
-    target_stop_id: str
+    transfer: Transfer
+    transfer_start_time: datetime
     transfer_end_time: datetime
     connection: Connection
     """
@@ -388,25 +420,32 @@ class TransferVisitor(Visitor):
     """
 
     @staticmethod
-    def create_all(origin_stop: Stop, arrival_time: datetime, connection: Connection) -> list["TransferVisitor"]:
+    def create_all(origin_stop: Stop, arrival_time: datetime, connection: Connection) -> Iterable["TransferVisitor"]:
         """Find all transfers that can be realised from a stop and create a TransferVisitor for each of them."""
-        dataset = origin_stop._dataset
-        match dataset.config["TRANSFER_MODE"]:
-            case "by_asw_node_id":
-                if origin_stop.asw_node_id is None:
-                    return []
-                stops = dataset.get_stops_by_asw_node_id(origin_stop.asw_node_id)
-                transfer_end_time = arrival_time + timedelta(minutes=dataset.config["MIN_TRANSFER_TIME"])
-                return [TransferVisitor(
-                    target_stop_id=stop.stop_id,
-                    transfer_end_time=transfer_end_time,
-                    connection=connection
-                ) for stop in stops]
-            case _: # either "none" or some invalid/unsupported value
-                return []
-    
+        return (TransferVisitor(
+            transfer=transfer,
+            transfer_start_time=arrival_time,
+            transfer_end_time=arrival_time + timedelta(minutes=transfer.transfer_time),
+            connection=connection
+        ) for transfer in origin_stop.get_all_transfers())
+
     def next_event(self) -> datetime:
         return self.transfer_end_time
     
-    def next(self, visited_stops: dict[str, Connection], visited_trips: dict[str, OpenConnection]) -> list[Visitor]:
-        pass # TODO
+    def next(self, visited_stops: dict[str, Connection], _: dict[str, OpenConnection]) -> list[Visitor]:
+        new_connection = self.connection.with_transfer(self.transfer, self.transfer_start_time, self.transfer_end_time)
+        target_stop_id = self.transfer.to_stop_id
+
+        if target_stop_id in visited_stops:
+            if new_connection.quality > visited_stops[target_stop_id].quality:
+                # Found a better connection to an already visited stop - just replace it in visited_stops
+                # (no need to create a new StopVisitor - one already exists)
+                visited_stops[target_stop_id] = new_connection
+        else:
+            # Found a new stop
+            new_stop_visitor = StopVisitor.create_from_transfer(self.transfer, self.transfer_end_time)
+            if new_stop_visitor is not None:
+                visited_stops[target_stop_id] = new_connection
+                return [new_stop_visitor]
+
+        return []
