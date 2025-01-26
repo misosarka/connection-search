@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from dateutil.parser import parse, ParserError
@@ -14,7 +15,7 @@ from .dataset import Dataset
 class StopTrieNode:
     stops: dict[str, list[str]] = field(default_factory=dict)
     """A mapping of full stop names to all stop_ids of stops with this name."""
-    next_letters: dict[str, "StopTrieNode"] = field(default_factory=dict)
+    next_letters: dict[str, StopTrieNode] = field(default_factory=dict)
 
     def yield_all_stops(self) -> Iterable[tuple[str, list[str]]]:
         for name, ids in self.stops.items():

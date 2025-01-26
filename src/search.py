@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from queue import PriorityQueue
 
 from .dataset import Dataset
-from .visitor import StopVisitor, Visitor
+from .visitor import StopVisitor, TransferVisitor, Visitor
 from .connection import Connection, OpenConnection
 
 
@@ -33,10 +33,18 @@ def search(params: SearchParams, dataset: Dataset) -> SearchResult:
     destinations = params.destination_stop_ids
 
     for origin_stop_id in params.origin_stop_ids:
+        # Create StopVisitor at the origin stop
         origin_visitor = StopVisitor.create_at_origin(dataset, origin_stop_id, params.departure)
         if origin_visitor is not None:
             queue.put(origin_visitor)
             visited_stops[origin_stop_id] = Connection.empty()
+        
+        # Create TransferVisitors for transfers directly from the origin stop
+        for transfer_visitor in TransferVisitor.create_all(
+            dataset.get_stop_by_id(origin_stop_id), params.departure, Connection.empty()
+        ):
+            if transfer_visitor.transfer.to_stop_id not in params.origin_stop_ids:
+                queue.put(transfer_visitor)
 
     previous_time = params.departure
     while not queue.empty():

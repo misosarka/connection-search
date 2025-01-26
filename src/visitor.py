@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from functools import total_ordering
@@ -7,7 +8,7 @@ from typing import Iterable
 import pandas as pd
 
 from .dataset import Dataset
-from .connection import Connection, OpenConnection, TransferConnectionSegment
+from .connection import Connection, OpenConnection
 from .structures import PickupDropoffType, Stop, StopTime, Transfer, Trip
 
 
@@ -30,7 +31,7 @@ class Visitor(ABC):
             return self.next_event() == other.next_event()
         return NotImplemented
     
-    def __lt__(self, other: "Visitor") -> bool:
+    def __lt__(self, other: Visitor) -> bool:
         return self.next_event() < other.next_event()
 
     @abstractmethod
@@ -41,7 +42,7 @@ class Visitor(ABC):
         """
 
     @abstractmethod
-    def next(self, visited_stops: dict[str, Connection], visited_trips: dict[str, OpenConnection]) -> list["Visitor"]:
+    def next(self, visited_stops: dict[str, Connection], visited_trips: dict[str, OpenConnection]) -> list[Visitor]:
         """
         Handle the next event (departure or stop).
 
@@ -61,7 +62,7 @@ class TripVisitor(Visitor):
     next_stoptime_idx: int
 
     @classmethod
-    def create(cls, departure_stoptime: StopTime, service_day: date) -> "TripVisitor | None":
+    def create(cls, departure_stoptime: StopTime, service_day: date) -> TripVisitor | None:
         """
         Attempt to create a TripVisitor for a trip starting with the specified departure and running on a specified service day.
         If there are no more valid stops on the trip after the departure, do not create anything and return None.
@@ -156,7 +157,7 @@ class StopVisitor(Visitor):
     """Index after which to search for subsequent departures with times between 24:00 and 47:59."""
 
     @classmethod
-    def create(cls, arrival_stoptime: StopTime, service_day: date) -> "StopVisitor | None":
+    def create(cls, arrival_stoptime: StopTime, service_day: date) -> StopVisitor | None:
         """
         Attempt to create a StopVisitor for a stop after the arrival of a trip running on a specified service day.
         If there are no more valid trips from the stop in 24 hours, do not create anything and return None.
@@ -174,7 +175,7 @@ class StopVisitor(Visitor):
         return visitor
 
     @classmethod
-    def create_at_origin(cls, dataset: Dataset, origin_stop_id: str, start_time: datetime) -> "StopVisitor | None":
+    def create_at_origin(cls, dataset: Dataset, origin_stop_id: str, start_time: datetime) -> StopVisitor | None:
         """
         Attempt to create a StopVisitor at the origin of the connection search.
         If there are no valid trips from the stop in 24 hours, do not create anything and return None.
@@ -194,7 +195,7 @@ class StopVisitor(Visitor):
         return visitor
 
     @classmethod
-    def create_from_transfer(cls, transfer: Transfer, start_time: datetime) -> "StopVisitor | None":
+    def create_from_transfer(cls, transfer: Transfer, start_time: datetime) -> StopVisitor | None:
         """
         Attempt to create a StopVisitor at the end of the specified transfer.
         If there are no valid trips from the stop in 24 hours, do not create anything and return None.
@@ -420,7 +421,7 @@ class TransferVisitor(Visitor):
     """
 
     @staticmethod
-    def create_all(origin_stop: Stop, arrival_time: datetime, connection: Connection) -> Iterable["TransferVisitor"]:
+    def create_all(origin_stop: Stop, arrival_time: datetime, connection: Connection) -> Iterable[TransferVisitor]:
         """Find all transfers that can be realised from a stop and create a TransferVisitor for each of them."""
         return (TransferVisitor(
             transfer=transfer,

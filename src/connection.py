@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from functools import total_ordering
@@ -111,7 +112,7 @@ class ConnectionQuality:
     first_departure: datetime | None
     transfer_count: int
 
-    def __lt__(self, other: "ConnectionQuality") -> bool:
+    def __lt__(self, other: ConnectionQuality) -> bool:
         # self < other => True if self has lower quality => earlier departure or higher transfer count
         if self.first_departure is None:
             return False
@@ -126,18 +127,18 @@ class ConnectionQuality:
 
 @dataclass
 class Connection:
-    """A sequence of trips (todo: and transfers), starting and ending in a stop."""
+    """A sequence of trips and transfers, starting and ending in a stop."""
 
     segments: list[TripConnectionSegment | TransferConnectionSegment]
 
     @classmethod
-    def empty(cls) -> "Connection":
+    def empty(cls) -> Connection:
         return cls([])
     
-    def to_open_connection(self, last_departure: StopTime, last_departure_service_day: date) -> "OpenConnection":
+    def to_open_connection(self, last_departure: StopTime, last_departure_service_day: date) -> OpenConnection:
         return OpenConnection(self.segments, OpenTripConnectionSegment(last_departure, last_departure_service_day))
     
-    def with_transfer(self, transfer: Transfer, start_departure: datetime, end_arrival: datetime) -> "Connection":
+    def with_transfer(self, transfer: Transfer, start_departure: datetime, end_arrival: datetime) -> Connection:
         return Connection(self.segments + [TransferConnectionSegment(transfer, start_departure, end_arrival)])
     
     @property
@@ -164,7 +165,7 @@ class Connection:
 
 @dataclass
 class OpenConnection:
-    """A sequence of trips (todo: and transfers), starting in a stop and ending on a trip."""
+    """A sequence of trips and transfers, starting in a stop and ending on a trip."""
 
     segments: list[TripConnectionSegment | TransferConnectionSegment]
     final_segment: OpenTripConnectionSegment
