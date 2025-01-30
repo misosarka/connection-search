@@ -426,7 +426,7 @@ class TransferVisitor(Visitor):
         return (TransferVisitor(
             transfer=transfer,
             transfer_start_time=arrival_time,
-            transfer_end_time=arrival_time + timedelta(minutes=transfer.transfer_time),
+            transfer_end_time=arrival_time + timedelta(seconds=transfer.transfer_time),
             connection=connection
         ) for transfer in origin_stop.get_all_transfers())
 

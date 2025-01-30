@@ -42,6 +42,22 @@ class Stop:
                     transfer_type=TransferType.BY_NODE_ID,
                     transfer_time=self._dataset.config["MIN_TRANSFER_TIME"]
                 ) for target_stop_id in target_stop_ids if target_stop_id != self.stop_id)
+
+            case "by_parent_station":
+                if self.parent_station is None:
+                    return []
+                target_stop_ids = self._dataset.get_stop_ids_by_parent_station(self.parent_station)
+                return (Transfer(
+                    _dataset=self._dataset,
+                    from_stop_id=self.stop_id,
+                    to_stop_id=target_stop_id,
+                    transfer_type=TransferType.BY_PARENT_STATION,
+                    transfer_time=self._dataset.config["MIN_TRANSFER_TIME"]
+                ) for target_stop_id in target_stop_ids if target_stop_id != self.stop_id)
+
+            case "by_transfers_txt":
+                return self._dataset.get_transfers_by_transfers_txt(self.stop_id)
+
             case _: # either "none" or some invalid/unsupported value
                 return []
 

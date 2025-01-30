@@ -2,7 +2,7 @@ from datetime import date
 from functools import cache
 import pandas as pd
 from typing import Any, Iterable
-from .structures import LocationType, MalformedGTFSError, PickupDropoffType, Route, RouteType, Stop, StopTime, Trip
+from .structures import LocationType, MalformedGTFSError, PickupDropoffType, Route, RouteType, Stop, StopTime, Transfer, TransferType, Trip
 
 
 class Dataset:
@@ -19,28 +19,52 @@ class Dataset:
 
         self.config = config
 
-        match config["TRANSFER_MODE"]:
-            case "by_node_id":
-                self._stops = self._read_csv_file("stops", {
-                    "stop_id": "string",
-                    "stop_name": "string",
-                    "location_type": "int",
-                    "parent_station": "string",
-                    config["TRANSFER_NODE_ID"]: "string",
-                }, "stop_id")
+        if config["TRANSFER_MODE"] == "by_node_id":
+            self._stops = self._read_csv_file("stops", {
+                "stop_id": "string",
+                "stop_name": "string",
+                "location_type": "int",
+                "parent_station": "string",
+                config["TRANSFER_NODE_ID"]: "string",
+            }, "stop_id")
 
-                self._stops_by_transfer_node_id = self._reindex(self._stops, config["TRANSFER_NODE_ID"])
+            self._stops_by_transfer_node_id = self._reindex(self._stops, config["TRANSFER_NODE_ID"])
 
-            case mode:
-                self._stops = self._read_csv_file("stops", {
-                    "stop_id": "string",
-                    "stop_name": "string",
-                    "location_type": "int",
-                    "parent_station": "string",
-                }, "stop_id")
+        else: # transfer by parent station / by transfer.txt / none
+            self._stops = self._read_csv_file("stops", {
+                "stop_id": "string",
+                "stop_name": "string",
+                "location_type": "int",
+                "parent_station": "string",
+            }, "stop_id")
 
-                if mode == "by_parent_station":
-                    self._stops_by_parent_station = self._reindex(self._stops, "parent_station")
+            if config["TRANSFER_MODE"] == "by_parent_station":
+                self._stops_by_parent_station = self._reindex(self._stops, "parent_station")
+
+            elif config["TRANSFER_MODE"] == "by_transfers_txt":
+                transfer_headers = self._read_csv_column_headers("transfers")
+                unsupported_transfer_headers = [header for header in [
+                    "from_trip_id", "to_trip_id", "from_route_id", "to_route_id"
+                ] if header in transfer_headers]
+                unsupported_headers_to_load = {header: "string" for header in unsupported_transfer_headers}
+
+                contains_min_transfer_time = "min_transfer_time" in transfer_headers
+                min_transfer_time_to_load = {"min_transfer_time": "int"} if contains_min_transfer_time else {}
+
+                self._transfers = self._read_csv_file("transfers", {
+                    "from_stop_id": "string",
+                    "to_stop_id": "string",
+                    "transfer_type": "int",
+                    **min_transfer_time_to_load,
+                    **unsupported_headers_to_load,
+                }, "from_stop_id")
+
+                if not min_transfer_time_to_load:
+                    self._transfers["min_transfer_time"] = pd.NA
+
+                for header in unsupported_transfer_headers:
+                    # For each unsupported header, only keep the rows where its value is None
+                    self._transfers = self._transfers.loc[self._transfers[header].isna()]
 
         self._routes = self._read_csv_file("routes", {
             "route_id": "string",
@@ -53,7 +77,7 @@ class Dataset:
             "trip_id": "string",
             "route_id": "string",
             "service_id": "string",
-            "trip_short_name": "string",
+            "trip_short_name": "optional:string",
         }, "trip_id")
 
         self._stop_times_by_trip = self._read_csv_file("stop_times", {
@@ -96,21 +120,33 @@ class Dataset:
 
         :param name: The name of the file to read, without the .txt extension.
         :param column_types: The columns to read, along with their datatypes. \
-            Valid datatypes are 'int', 'string', 'bool', 'datetime' and 'timedelta'.
-        :param index: The column (or tuple of columns) to use as the DataFrame index.
+            Valid datatypes are 'int', 'string', 'bool', 'datetime', 'timedelta' and 'optional:#', where '#' is a valid datatype. \
+            With the 'optional:' flag, the column will be created and filled with NA values if it is not present in the file.
+        :param index: The column (or list of columns) to use as the DataFrame index.
         :returns: A DataFrame with the data from the CSV file.
         """
 
+        headers = self._read_csv_column_headers(name)
+
+        optionals_not_present = []
         convert_to_timedelta = []
         convert_to_datetime = []
         for column in column_types:
+            if column_types[column].startswith("optional:"):
+                if column in headers:
+                    column_types[column] = column_types[column].removeprefix("optional:")
+                else:
+                    optionals_not_present.append(column)
+
             if column_types[column] == "timedelta":
                 convert_to_timedelta.append(column)
                 column_types[column] = "string"
             elif column_types[column] == "datetime":
                 convert_to_datetime.append(column)
                 column_types[column] = "string"
-        
+        for column in optionals_not_present:
+            del column_types[column]
+
         dataset_path = self.config["DATASET_PATH"]
         dataframe = pd.read_csv(
             f"{dataset_path}/{name}.txt",
@@ -118,6 +154,8 @@ class Dataset:
             dtype=column_types
         )
 
+        for column in optionals_not_present:
+            dataframe[column] = pd.NA
         for column in convert_to_timedelta:
             dataframe[column] = pd.to_timedelta(dataframe[column])
         for column in convert_to_datetime:
@@ -126,7 +164,14 @@ class Dataset:
             dataframe = dataframe.set_index(index).sort_index(inplace=False)
         
         return dataframe
-    
+
+
+    def _read_csv_column_headers(self, name: str) -> list[str]:
+        """Read all headers of the specified CSV file and return them as a list."""
+        dataset_path = self.config["DATASET_PATH"]
+        with open(f"{dataset_path}/{name}.txt", encoding="utf-8") as csv_file:
+            return csv_file.readline().strip().split(",")
+
 
     def _reindex(self, frame: pd.DataFrame, new_index: str | list[str]) -> pd.DataFrame:
         """
@@ -158,20 +203,10 @@ class Dataset:
     
 
     def get_stop_ids_by_parent_station(self, parent_station_id: str) -> Iterable[str]:
-        """Get a list of stop_ids of stops in the dataset whose parent station matches the specified id."""
-        # def to_stop(stop: pd.Series) -> Stop:
-        #     return Stop(
-        #         _dataset=self,
-        #         stop_id=stop["stop_id"],
-        #         stop_name=_replace_na(stop["stop_name"]),
-        #         location_type=LocationType(stop["location_type"]),
-        #         parent_station=parent_station_id,
-        #     )
-        
+        """Get an iterable of stop_ids of stops in the dataset whose parent station matches the specified id."""
         if self.config["TRANSFER_MODE"] != "by_parent_station":
             raise RuntimeError("called get_stops_by_parent_station when the transfer mode is not 'by_parent_station'")
         stops = self._stops_by_parent_station.loc[parent_station_id, "stop_id"]
-        #return stops.apply(to_stop, axis=1) # type: ignore[call-overload, arg-type]
         if isinstance(stops, pd.Series):
             return stops
         else:
@@ -179,7 +214,7 @@ class Dataset:
 
 
     def get_stop_ids_by_transfer_node_id(self, transfer_node_id: str) -> Iterable[str]:
-        """Get a list of stop_ids of stops in the dataset by their TRANSFER_NODE_ID as specified in the configuration."""
+        """Get an iterable of stop_ids of stops in the dataset by their TRANSFER_NODE_ID as specified in the configuration."""
         if self.config["TRANSFER_MODE"] != "by_node_id":
             raise RuntimeError("called get_stop_ids_by_transfer_node_id when the transfer mode is not 'by_node_id'")
         stops = self._stops_by_transfer_node_id.loc[transfer_node_id, "stop_id"]
@@ -187,6 +222,30 @@ class Dataset:
             return stops
         else:
             return [stops] # type: ignore[list-item]
+
+
+    def get_transfers_by_transfers_txt(self, from_stop_id: str) -> Iterable[Transfer]:
+        """Get an iterable of Transfer objects from the dataset by the stop_id of the stop they start on."""
+        def to_transfer(transfer: pd.Series) -> Transfer:
+            transfer_time = (self.config["MIN_TRANSFER_TIME"] if "min_transfer_time" not in transfer
+                             else max(self.config["MIN_TRANSFER_TIME"], transfer["min_transfer_time"]))
+            return Transfer(
+                _dataset=self,
+                from_stop_id=from_stop_id,
+                to_stop_id=transfer["to_stop_id"],
+                transfer_type=TransferType(transfer["transfer_type"]),
+                transfer_time=int(transfer_time),
+            )
+
+        if self.config["TRANSFER_MODE"] != "by_transfers_txt":
+            raise RuntimeError("called get_transfers_by_transfers_txt when the transfer mode is not 'by_transfers_txt'")
+        if from_stop_id not in self._transfers.index:
+            return []
+        transfers = self._transfers.loc[from_stop_id]
+        if isinstance(transfers, pd.Series):
+            return [to_transfer(transfers)]
+        else:
+            return transfers.apply(to_transfer, axis=1) # type: ignore[call-overload]
 
 
     def get_route_by_id(self, route_id: str) -> Route:

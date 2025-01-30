@@ -157,7 +157,15 @@ class Ui:
                     case TransferType.BY_TRANSFERS_GUARANTEED:
                         print("\tPěší přesun: garantovaný přestup")
                     case TransferType.BY_TRANSFERS_TIMED:
-                        print(f"\tPěší přesun: cca {segment.transfer.transfer_time} min")
+                        minutes, seconds = divmod(segment.transfer.transfer_time, 60)
+                        if minutes == 0 and seconds == 0:
+                            print("\tPěší přesun")
+                        elif minutes == 0 and seconds != 0:
+                            print(f"\tPěší přesun: cca {seconds} s")
+                        elif seconds == 0:
+                            print(f"\tPěší přesun: cca {minutes} min")
+                        else:
+                            print(f"\tPěší přesun: cca {minutes} min {seconds} s")
                     case _:
                         print("\tPěší přesun")
             else:
