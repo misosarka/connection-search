@@ -19,16 +19,28 @@ class Dataset:
 
         self.config = config
 
-        self._stops = self._read_csv_file("stops", {
-            "stop_id": "string",
-            "stop_name": "string",
-            "location_type": "int",
-            "parent_station": "string",
-            "asw_node_id": "string",
-        }, "stop_id")
+        match config["TRANSFER_MODE"]:
+            case "by_node_id":
+                self._stops = self._read_csv_file("stops", {
+                    "stop_id": "string",
+                    "stop_name": "string",
+                    "location_type": "int",
+                    "parent_station": "string",
+                    config["TRANSFER_NODE_ID"]: "string",
+                }, "stop_id")
 
-        self._stops_by_parent_station = self._reindex(self._stops, "parent_station")
-        self._stops_by_asw_node_id = self._reindex(self._stops, "asw_node_id")
+                self._stops_by_transfer_node_id = self._reindex(self._stops, config["TRANSFER_NODE_ID"])
+
+            case mode:
+                self._stops = self._read_csv_file("stops", {
+                    "stop_id": "string",
+                    "stop_name": "string",
+                    "location_type": "int",
+                    "parent_station": "string",
+                }, "stop_id")
+
+                if mode == "by_parent_station":
+                    self._stops_by_parent_station = self._reindex(self._stops, "parent_station")
 
         self._routes = self._read_csv_file("routes", {
             "route_id": "string",
@@ -138,29 +150,39 @@ class Dataset:
             stop_name=_replace_na(stop["stop_name"]),
             location_type=LocationType(stop["location_type"]),
             parent_station=_replace_na(stop["parent_station"]),
-            asw_node_id=_replace_na(stop["asw_node_id"]),
+            transfer_node_id=(
+                None if self.config["TRANSFER_MODE"] != "by_node_id"
+                else _replace_na(stop[self.config["TRANSFER_NODE_ID"]])
+            ),
         )
     
 
-    def get_stops_by_parent_station(self, parent_station_id: str) -> Iterable[Stop]:
-        """Get a list of Stop objects from the dataset whose parent station matches the specified id."""
-        def to_stop(stop: pd.Series) -> Stop:
-            return Stop(
-                _dataset=self,
-                stop_id=stop["stop_id"],
-                stop_name=_replace_na(stop["stop_name"]),
-                location_type=LocationType(stop["location_type"]),
-                parent_station=parent_station_id,
-                asw_node_id=_replace_na(stop["asw_node_id"]),
-            )
+    def get_stop_ids_by_parent_station(self, parent_station_id: str) -> Iterable[str]:
+        """Get a list of stop_ids of stops in the dataset whose parent station matches the specified id."""
+        # def to_stop(stop: pd.Series) -> Stop:
+        #     return Stop(
+        #         _dataset=self,
+        #         stop_id=stop["stop_id"],
+        #         stop_name=_replace_na(stop["stop_name"]),
+        #         location_type=LocationType(stop["location_type"]),
+        #         parent_station=parent_station_id,
+        #     )
         
-        stops = self._stops_by_parent_station.loc[parent_station_id]
-        return stops.apply(to_stop, axis=1) # type: ignore[call-overload, arg-type]
+        if self.config["TRANSFER_MODE"] != "by_parent_station":
+            raise RuntimeError("called get_stops_by_parent_station when the transfer mode is not 'by_parent_station'")
+        stops = self._stops_by_parent_station.loc[parent_station_id, "stop_id"]
+        #return stops.apply(to_stop, axis=1) # type: ignore[call-overload, arg-type]
+        if isinstance(stops, pd.Series):
+            return stops
+        else:
+            return [stops] # type: ignore[list-item]
 
 
-    def get_stop_ids_by_asw_node_id(self, asw_node_id: str) -> Iterable[str]:
-        """Get a list of stop_ids of stops in the dataset by their asw_node_id."""
-        stops = self._stops_by_asw_node_id.loc[asw_node_id, "stop_id"]
+    def get_stop_ids_by_transfer_node_id(self, transfer_node_id: str) -> Iterable[str]:
+        """Get a list of stop_ids of stops in the dataset by their TRANSFER_NODE_ID as specified in the configuration."""
+        if self.config["TRANSFER_MODE"] != "by_node_id":
+            raise RuntimeError("called get_stop_ids_by_transfer_node_id when the transfer mode is not 'by_node_id'")
+        stops = self._stops_by_transfer_node_id.loc[transfer_node_id, "stop_id"]
         if isinstance(stops, pd.Series):
             return stops
         else:

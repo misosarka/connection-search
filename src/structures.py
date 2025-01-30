@@ -27,19 +27,19 @@ class Stop:
     stop_name: str | None
     location_type: LocationType
     parent_station: str | None
-    asw_node_id: str | None
+    transfer_node_id: str | None
 
     def get_all_transfers(self) -> Iterable[Transfer]:
         match self._dataset.config["TRANSFER_MODE"]:
-            case "by_asw_node_id":
-                if self.asw_node_id is None:
+            case "by_node_id":
+                if self.transfer_node_id is None:
                     return []
-                target_stop_ids = self._dataset.get_stop_ids_by_asw_node_id(self.asw_node_id)
+                target_stop_ids = self._dataset.get_stop_ids_by_transfer_node_id(self.transfer_node_id)
                 return (Transfer(
                     _dataset=self._dataset,
                     from_stop_id=self.stop_id,
                     to_stop_id=target_stop_id,
-                    transfer_type=TransferType.BY_ASW_NODE_ID,
+                    transfer_type=TransferType.BY_NODE_ID,
                     transfer_time=self._dataset.config["MIN_TRANSFER_TIME"]
                 ) for target_stop_id in target_stop_ids if target_stop_id != self.stop_id)
             case _: # either "none" or some invalid/unsupported value
@@ -154,7 +154,7 @@ class TransferType(Enum):
     BY_TRANSFERS_PROHIBITED = 3
     BY_TRANSFERS_INSEAT = 4
     BY_TRANSFERS_REBOARD = 5
-    BY_ASW_NODE_ID = -1
+    BY_NODE_ID = -1
     BY_PARENT_STATION = -2
 
 

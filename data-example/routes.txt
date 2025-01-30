@@ -1,0 +1,40 @@
+route_id,agency_id,route_short_name,route_long_name,route_type,route_url,route_color,route_text_color,is_night,is_regional,is_substitute_transport
+L1,99,1,"Sídliště Petřiny - Výstaviště",0,"https://pid.cz/linka/1",7A0603,FFFFFF,0,0,0
+L2,99,2,"Sídliště Petřiny - Nádraží Braník",0,"https://pid.cz/linka/2",7A0603,FFFFFF,0,0,0
+L3,99,3,"Březiněveská - Nádraží Braník - Sídliště Modřany",0,"https://pid.cz/linka/3",7A0603,FFFFFF,0,0,0
+L4,99,4,"Slivenec - Kubánské náměstí",0,"https://pid.cz/linka/4",7A0603,FFFFFF,0,0,0
+L5,99,5,"Slivenec - Vozovna Žižkov",0,"https://pid.cz/linka/5",7A0603,FFFFFF,0,0,0
+L6,99,6,"Nádraží Holešovice - Kubánské náměstí",0,"https://pid.cz/linka/6",7A0603,FFFFFF,0,0,0
+L7,99,7,"Radlická - Lehovec",0,"https://pid.cz/linka/7",7A0603,FFFFFF,0,0,0
+L8,99,8,"Nádraží Podbaba - Starý Hloubětín",0,"https://pid.cz/linka/8",7A0603,FFFFFF,0,0,0
+L9,99,9,"Sídliště Řepy - Spojovací",0,"https://pid.cz/linka/9",7A0603,FFFFFF,0,0,0
+L10,99,10,"Sídliště Řepy - Sídliště Ďáblice",0,"https://pid.cz/linka/10",7A0603,FFFFFF,0,0,0
+L11,99,11,"Spojovací - Spořilov",0,"https://pid.cz/linka/11",7A0603,FFFFFF,0,0,0
+L12,99,12,"Lehovec - Sídliště Barrandov",0,"https://pid.cz/linka/12",7A0603,FFFFFF,0,0,0
+L13,99,13,"Čechovo náměstí - Olšanské hřbitovy",0,"https://pid.cz/linka/13",7A0603,FFFFFF,0,0,0
+L14,99,14,"Nádraží Holešovice - Spořilov",0,"https://pid.cz/linka/14",7A0603,FFFFFF,0,0,0
+L15,99,15,"Kotlářka - Olšanské hřbitovy",0,"https://pid.cz/linka/15",7A0603,FFFFFF,0,0,0
+L16,99,16,"Sídliště Řepy - Kotlářka - Ústřední dílny Dopravního podniku",0,"https://pid.cz/linka/16",7A0603,FFFFFF,0,0,0
+L17,99,17,"Vozovna Kobylisy - Březiněveská - Sídliště Modřany - Libuš",0,"https://pid.cz/linka/17",7A0603,FFFFFF,0,0,0
+L18,99,18,"Nádraží Podbaba - Vozovna Pankrác",0,"https://pid.cz/linka/18",7A0603,FFFFFF,0,0,0
+L19,99,19,"Depo Hostivař - Pankrác",0,"https://pid.cz/linka/19",7A0603,FFFFFF,0,0,0
+L20,99,20,"Dědina - Sídliště Barrandov",0,"https://pid.cz/linka/20",7A0603,FFFFFF,0,0,0
+L21,99,21,"Radlická - Sídliště Modřany",0,"https://pid.cz/linka/21",7A0603,FFFFFF,0,0,0
+L22,99,22,"Bílá Hora - Vypich - Zahradní Město - Nádraží Hostivař",0,"https://pid.cz/linka/22",7A0603,FFFFFF,0,0,0
+L23,99,23,"Královka - Zvonařka",0,"https://pid.cz/linka/23",7A0603,FFFFFF,0,0,0
+L24,99,24,"Vozovna Kobylisy - Náměstí bratří Synků",0,"https://pid.cz/linka/24",7A0603,FFFFFF,0,0,0
+L25,99,25,"Bílá Hora - Výstaviště",0,"https://pid.cz/linka/25",7A0603,FFFFFF,0,0,0
+L26,99,26,"Dědina  - Nádraží Hostivař",0,"https://pid.cz/linka/26",7A0603,FFFFFF,0,0,0
+L30,99,30,"Březiněveská / Kobylisy - Dědina",0,"https://pid.cz/linka/30",7A0603,FFFFFF,0,0,0
+L31,99,31,"Vysočanská - Spojovací",0,"https://pid.cz/linka/31",7A0603,FFFFFF,0,0,0
+L32,99,32,"Březiněveská / Kobylisy - Vypich",0,"https://pid.cz/linka/32",7A0603,FFFFFF,0,0,0
+L90,99,90,"Olšanské hřbitovy - Špejchar",0,"https://pid.cz/linka/90",7A0603,FFFFFF,1,0,0
+L91,99,91,"Divoká Šárka - Staré Strašnice",0,"https://pid.cz/linka/91",7A0603,FFFFFF,1,0,0
+L92,99,92,"Levského - Lehovec",0,"https://pid.cz/linka/92",7A0603,FFFFFF,1,0,0
+L93,99,93,"Sídliště Ďáblice - Vozovna Pankrác",0,"https://pid.cz/linka/93",7A0603,FFFFFF,1,0,0
+L94,99,94,"Slivenec - Lehovec",0,"https://pid.cz/linka/94",7A0603,FFFFFF,1,0,0
+L95,99,95,"Vozovna Kobylisy - Ústřední dílny Dopravního podniku",0,"https://pid.cz/linka/95",7A0603,FFFFFF,1,0,0
+L96,99,96,"Sídliště Petřiny - Spořilov",0,"https://pid.cz/linka/96",7A0603,FFFFFF,1,0,0
+L97,99,97,"Bílá Hora - Nádraží Hostivař",0,"https://pid.cz/linka/97",7A0603,FFFFFF,1,0,0
+L98,99,98,"Sídliště Řepy - Spojovací",0,"https://pid.cz/linka/98",7A0603,FFFFFF,1,0,0
+L99,99,99,"Sídliště Řepy - Zahradní Město",0,"https://pid.cz/linka/99",7A0603,FFFFFF,1,0,0
