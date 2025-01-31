@@ -1,3 +1,5 @@
+# type: ignore
+
 from datetime import date
 from functools import cache
 from os.path import isfile

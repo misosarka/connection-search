@@ -1,4 +1,4 @@
-from src.dataset import Dataset
+from src.new_dataset import Dataset
 from src.ui import Ui
 from config import CONFIG
 

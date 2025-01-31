@@ -2,14 +2,12 @@ from __future__ import annotations
 from abc import abstractmethod
 from collections import defaultdict
 from csv import DictReader
-from dataclasses import dataclass, field
 from datetime import date, timedelta
 from functools import cache
 from os.path import isfile
 from typing import Any, Callable, Iterable, Protocol, Self, overload
 
-from pandas import Timedelta # TODO: remove and use only datetime types
-from .structures import LocationType, PickupDropoffType, Route, RouteType, Stop, StopTime, Transfer, TransferType, Trip
+from .structures import CalendarDatesRecord, CalendarRecord, LocationType, PickupDropoffType, Route, RouteType, Stop, StopTime, Transfer, TransferType, Trip
 
 
 class Dataset:
@@ -139,8 +137,8 @@ class Dataset:
             _dataset=self,
             trip_id=row["trip_id"],
             stop_sequence=int(row["stop_sequence"]),
-            arrival_time=Timedelta(_parse_time(row["arrival_time"])),
-            departure_time=Timedelta(_parse_time(row["departure_time"])),
+            arrival_time=_parse_time(row["arrival_time"]),
+            departure_time=_parse_time(row["departure_time"]),
             stop_id=row["stop_id"],
             pickup_type=_get_or_default(row, "pickup_type", PickupDropoffType.REGULAR, lambda s: PickupDropoffType(int(s))),
             drop_off_type=_get_or_default(row, "drop_off_type", PickupDropoffType.REGULAR, lambda s: PickupDropoffType(int(s))),
@@ -271,24 +269,6 @@ def _parse_date(date_str: str) -> date:
     """Parse a date string in YYYYMMDD format."""
     y, m, d = map(int, (date_str[:3], date_str[4:5], date_str[6:]))
     return date(year=y, month=m, day=d)
-
-
-# TODO: move to structures.py
-@dataclass
-class CalendarRecord:
-    _dataset: Dataset = field(repr=False)
-    service_id: str
-    weekday_services: dict[int, bool]
-    start_date: date
-    end_date: date
-
-
-@dataclass
-class CalendarDatesRecord:
-    _dataset: Dataset = field(repr=False)
-    service_id: str
-    date: date
-    service_available: bool
 
 
 class Comparable(Protocol):

@@ -1,11 +1,11 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from enum import Enum
 from typing import TYPE_CHECKING, Iterable
-import pandas as pd
 
 if TYPE_CHECKING:
-    from .dataset import Dataset
+    from .new_dataset import Dataset
 
 
 class MalformedGTFSError(Exception):
@@ -30,36 +30,10 @@ class Stop:
     transfer_node_id: str | None
 
     def get_all_transfers(self) -> Iterable[Transfer]:
-        match self._dataset.config["TRANSFER_MODE"]:
-            case "by_node_id":
-                if self.transfer_node_id is None:
-                    return []
-                target_stop_ids = self._dataset.get_stop_ids_by_transfer_node_id(self.transfer_node_id)
-                return (Transfer(
-                    _dataset=self._dataset,
-                    from_stop_id=self.stop_id,
-                    to_stop_id=target_stop_id,
-                    transfer_type=TransferType.BY_NODE_ID,
-                    transfer_time=self._dataset.config["MIN_TRANSFER_TIME"]
-                ) for target_stop_id in target_stop_ids if target_stop_id != self.stop_id)
+        return self._dataset.get_all_transfers_from(self)
 
-            case "by_parent_station":
-                if self.parent_station is None:
-                    return []
-                target_stop_ids = self._dataset.get_stop_ids_by_parent_station(self.parent_station)
-                return (Transfer(
-                    _dataset=self._dataset,
-                    from_stop_id=self.stop_id,
-                    to_stop_id=target_stop_id,
-                    transfer_type=TransferType.BY_PARENT_STATION,
-                    transfer_time=self._dataset.config["MIN_TRANSFER_TIME"]
-                ) for target_stop_id in target_stop_ids if target_stop_id != self.stop_id)
-
-            case "by_transfers_txt":
-                return self._dataset.get_transfers_by_transfers_txt(self.stop_id)
-
-            case _: # either "none" or some invalid/unsupported value
-                return []
+    def get_departures(self) -> list[StopTime]:
+        return self._dataset.get_stop_times_by_stop_id(self.stop_id)
 
 
 class RouteType(Enum):
@@ -137,6 +111,12 @@ class Trip:
     def get_route(self) -> Route:
         return self._dataset.get_route_by_id(self.route_id)
 
+    def get_stop_times(self) -> list[StopTime]:
+        return self._dataset.get_stop_times_by_trip_id(self.trip_id)
+
+    def runs_on_day(self, service_day: date) -> bool:
+        return self._dataset.runs_on_day(self.service_id, service_day)
+
 
 class PickupDropoffType(Enum):
     REGULAR = 0
@@ -150,8 +130,8 @@ class StopTime:
     _dataset: Dataset = field(repr=False)
     trip_id: str
     stop_sequence: int
-    arrival_time: pd.Timedelta
-    departure_time: pd.Timedelta
+    arrival_time: timedelta
+    departure_time: timedelta
     stop_id: str
     pickup_type: PickupDropoffType
     drop_off_type: PickupDropoffType
@@ -161,6 +141,23 @@ class StopTime:
     
     def get_trip(self) -> Trip:
         return self._dataset.get_trip_by_id(self.trip_id)
+
+
+@dataclass
+class CalendarRecord:
+    _dataset: Dataset = field(repr=False)
+    service_id: str
+    weekday_services: dict[int, bool]
+    start_date: date
+    end_date: date
+
+
+@dataclass
+class CalendarDatesRecord:
+    _dataset: Dataset = field(repr=False)
+    service_id: str
+    date: date
+    service_available: bool
 
 
 class TransferType(Enum):

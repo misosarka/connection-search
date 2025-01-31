@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from queue import PriorityQueue
 
-from .dataset import Dataset
+from .new_dataset import Dataset
 from .visitor import StopVisitor, TransferVisitor, Visitor
 from .connection import Connection, OpenConnection
 
