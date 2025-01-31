@@ -1,5 +1,6 @@
 from datetime import date
 from functools import cache
+from os.path import isfile
 import pandas as pd
 from typing import Any, Iterable
 from .structures import LocationType, MalformedGTFSError, PickupDropoffType, Route, RouteType, Stop, StopTime, Transfer, TransferType, Trip
@@ -33,43 +34,34 @@ class Dataset:
         else: # transfer by parent station / by transfer.txt / none
             self._stops = self._read_csv_file("stops", {
                 "stop_id": "string",
-                "stop_name": "string",
-                "location_type": "int",
-                "parent_station": "string",
+                "stop_name": "optional:string",
+                "location_type": "optional:int",
+                "parent_station": "optional:string",
             }, "stop_id")
 
             if config["TRANSFER_MODE"] == "by_parent_station":
                 self._stops_by_parent_station = self._reindex(self._stops, "parent_station")
 
             elif config["TRANSFER_MODE"] == "by_transfers_txt":
-                transfer_headers = self._read_csv_column_headers("transfers")
-                unsupported_transfer_headers = [header for header in [
-                    "from_trip_id", "to_trip_id", "from_route_id", "to_route_id"
-                ] if header in transfer_headers]
-                unsupported_headers_to_load = {header: "string" for header in unsupported_transfer_headers}
-
-                contains_min_transfer_time = "min_transfer_time" in transfer_headers
-                min_transfer_time_to_load = {"min_transfer_time": "int"} if contains_min_transfer_time else {}
-
                 self._transfers = self._read_csv_file("transfers", {
                     "from_stop_id": "string",
                     "to_stop_id": "string",
                     "transfer_type": "int",
-                    **min_transfer_time_to_load,
-                    **unsupported_headers_to_load,
+                    "min_transfer_time": "optional:int",
+                    "from_trip_id": "optional:string",
+                    "to_trip_id": "optional:string",
+                    "from_route_id": "optional:string",
+                    "to_route_id": "optional:string",
                 }, "from_stop_id")
 
-                if not min_transfer_time_to_load:
-                    self._transfers["min_transfer_time"] = pd.NA
-
-                for header in unsupported_transfer_headers:
+                for header in ["from_trip_id", "to_trip_id", "from_route_id", "to_route_id"]:
                     # For each unsupported header, only keep the rows where its value is None
                     self._transfers = self._transfers.loc[self._transfers[header].isna()]
 
         self._routes = self._read_csv_file("routes", {
             "route_id": "string",
-            "route_short_name": "string",
-            "route_long_name": "string",
+            "route_short_name": "optional:string",
+            "route_long_name": "optional:string",
             "route_type": "int",
         }, "route_id")
 
@@ -86,13 +78,13 @@ class Dataset:
             "arrival_time": "timedelta",
             "departure_time": "timedelta",
             "stop_id": "string",
-            "pickup_type": "int",
-            "drop_off_type": "int",
+            "pickup_type": "optional:int",
+            "drop_off_type": "optional:int",
         }, ["trip_id", "stop_sequence"])
 
         self._stop_times_by_stop = self._reindex(self._stop_times_by_trip, ["stop_id", "departure_time"])
 
-        self._calendar = self._read_csv_file("calendar", {
+        self._calendar = self._read_optional_csv_file("calendar", {
             "service_id": "string",
             "monday": "bool",
             "tuesday": "bool",
@@ -105,7 +97,7 @@ class Dataset:
             "end_date": "datetime",
         }, "service_id")
 
-        self._calendar_dates = self._read_csv_file("calendar_dates", {
+        self._calendar_dates = self._read_optional_csv_file("calendar_dates", {
             "service_id": "string",
             "date": "datetime",
             "exception_type": "int",
@@ -144,6 +136,9 @@ class Dataset:
             elif column_types[column] == "datetime":
                 convert_to_datetime.append(column)
                 column_types[column] = "string"
+            elif column_types[column] == "int":
+                column_types[column] = "Int64" # Int64 is a nullable type, int is not
+
         for column in optionals_not_present:
             del column_types[column]
 
@@ -166,11 +161,36 @@ class Dataset:
         return dataframe
 
 
+    def _read_optional_csv_file(self, name: str, column_types: dict[str, str], index: None | str | list[str] = None) -> pd.DataFrame:
+        """
+        Read a CSV file into a Pandas DataFrame, if it exists. Otherwise, create an empty DataFrame.
+
+        For information about parameters, see _read_csv_file.
+        """
+        if self._csv_exists(name):
+            return self._read_csv_file(name, column_types, index)
+        else:
+            if index is None:
+                index_cols = []
+            elif isinstance(index, str):
+                index_cols = [index]
+            else:
+                index_cols = index
+            columns = [col for col in column_types.keys() if col not in index_cols]
+            return pd.DataFrame(data=[], index=[], columns=columns)
+
+
     def _read_csv_column_headers(self, name: str) -> list[str]:
         """Read all headers of the specified CSV file and return them as a list."""
         dataset_path = self.config["DATASET_PATH"]
         with open(f"{dataset_path}/{name}.txt", encoding="utf-8") as csv_file:
-            return csv_file.readline().strip().split(",")
+            return [header.removeprefix('"').removesuffix('"') for header in csv_file.readline().strip().split(",")]
+
+
+    def _csv_exists(self, name: str) -> bool:
+        """Return whether a CSV file exists in the dataset."""
+        dataset_path = self.config["DATASET_PATH"]
+        return isfile(f"{dataset_path}/{name}.txt")
 
 
     def _reindex(self, frame: pd.DataFrame, new_index: str | list[str]) -> pd.DataFrame:
@@ -193,7 +213,7 @@ class Dataset:
             _dataset=self,
             stop_id=stop_id,
             stop_name=_replace_na(stop["stop_name"]),
-            location_type=LocationType(stop["location_type"]),
+            location_type=LocationType(_replace_na(stop["location_type"], LocationType.STOP_OR_PLATFORM)),
             parent_station=_replace_na(stop["parent_station"]),
             transfer_node_id=(
                 None if self.config["TRANSFER_MODE"] != "by_node_id"
@@ -227,7 +247,7 @@ class Dataset:
     def get_transfers_by_transfers_txt(self, from_stop_id: str) -> Iterable[Transfer]:
         """Get an iterable of Transfer objects from the dataset by the stop_id of the stop they start on."""
         def to_transfer(transfer: pd.Series) -> Transfer:
-            transfer_time = (self.config["MIN_TRANSFER_TIME"] if "min_transfer_time" not in transfer
+            transfer_time = (self.config["MIN_TRANSFER_TIME"] if pd.isna(transfer["min_transfer_time"])
                              else max(self.config["MIN_TRANSFER_TIME"], transfer["min_transfer_time"]))
             return Transfer(
                 _dataset=self,
@@ -315,8 +335,8 @@ class Dataset:
             arrival_time=stop_time["arrival_time"],
             departure_time=stop_time["departure_time"],
             stop_id=stop_time["stop_id"],
-            pickup_type=PickupDropoffType(_replace_na(stop_time["pickup_type"], 0)),
-            drop_off_type=PickupDropoffType(_replace_na(stop_time["drop_off_type"], 0)),
+            pickup_type=PickupDropoffType(_replace_na(stop_time["pickup_type"], PickupDropoffType.REGULAR)),
+            drop_off_type=PickupDropoffType(_replace_na(stop_time["drop_off_type"], PickupDropoffType.REGULAR)),
         )
     
 
@@ -331,8 +351,8 @@ class Dataset:
             arrival_time=stop_time["arrival_time"],
             departure_time=stop_time.name[1], # type: ignore[index]
             stop_id=stop_time.name[0], # type: ignore[index]
-            pickup_type=PickupDropoffType(_replace_na(stop_time["pickup_type"], 0)),
-            drop_off_type=PickupDropoffType(_replace_na(stop_time["drop_off_type"], 0)),
+            pickup_type=PickupDropoffType(_replace_na(stop_time["pickup_type"], PickupDropoffType.REGULAR)),
+            drop_off_type=PickupDropoffType(_replace_na(stop_time["drop_off_type"], PickupDropoffType.REGULAR)),
         )
 
 
@@ -361,11 +381,15 @@ class Dataset:
 
     def get_all_stop_ids_and_names(self) -> Iterable[tuple[str, str]]:
         """For every stop, return a tuple (stop_id, stop_name)."""
-        return ((stop_id, stop_name) for (stop_id, stop_name, location_type) in (
-            (stop_id, _replace_na(stop_name), LocationType(location_type)) for (stop_id, stop_name, location_type) in zip(
-                self._stops.index, self._stops["stop_name"], self._stops["location_type"]
-            )
-        ) if stop_name != None and location_type == LocationType.STOP_OR_PLATFORM)
+        all_stops = (
+            (stop_id, _replace_na(stop_name), LocationType(_replace_na(location_type, LocationType.STOP_OR_PLATFORM)))
+            for (stop_id, stop_name, location_type)
+            in zip(self._stops.index, self._stops["stop_name"], self._stops["location_type"])
+        )
+        return (
+            (stop_id, stop_name) for (stop_id, stop_name, location_type) in all_stops
+            if stop_name != None and location_type == LocationType.STOP_OR_PLATFORM
+        )
 
 
 def _replace_na(value: Any, replace_with: Any = None) -> Any:
