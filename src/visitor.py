@@ -5,7 +5,7 @@ from functools import total_ordering
 from abc import ABC, abstractmethod
 from typing import Iterable
 
-from .new_dataset import Dataset
+from .dataset import Dataset
 from .connection import Connection, OpenConnection
 from .structures import PickupDropoffType, Stop, StopTime, Transfer, Trip
 

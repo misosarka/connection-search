@@ -8,7 +8,7 @@ from cProfile import Profile
 from .structures import TransferType
 from .connection import TransferConnectionSegment
 from .search import SearchParams, SearchResult, search
-from .new_dataset import Dataset
+from .dataset import Dataset
 
 
 @dataclass

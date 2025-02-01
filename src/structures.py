@@ -5,7 +5,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Iterable
 
 if TYPE_CHECKING:
-    from .new_dataset import Dataset
+    from .dataset import Dataset
 
 
 class MalformedGTFSError(Exception):
