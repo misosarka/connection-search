@@ -19,6 +19,15 @@ class LocationType(Enum):
     GENERIC_NODE = 3
     BOARDING_AREA = 4
 
+    @staticmethod
+    def from_field(field: str) -> LocationType:
+        """Convert a string field from a CSV file to a LocationType."""
+        value = int(field)
+        if 0 <= value <= 4:
+            return LocationType(value)
+        else:
+            raise MalformedGTFSError("stops.location_type not in valid range")
+
 
 @dataclass
 class Stop:
@@ -47,6 +56,40 @@ class RouteType(Enum):
     FUNICULAR = 7
     TROLLEYBUS = 11
     MONORAIL = 12
+
+    @staticmethod
+    def from_field(field: str) -> RouteType:
+        """
+        Convert a string field from a CSV file to a RouteType.
+        
+        All values from the standard specification are supported, along with some (but not all) values from
+        the Google Transit extension specification.
+        """
+        match int(field):
+            case x if x == 0 or 900 <= x <= 906:
+                return RouteType.TRAM_LIGHT_RAIL
+            case x if x == 1 or 400 <= x <= 404:
+                return RouteType.METRO_SUBWAY
+            case x if x == 2 or 100 <= x <= 117:
+                return RouteType.RAIL
+            case x if x == 3 or 200 <= x <= 209 or 700 <= x <= 716:
+                return RouteType.BUS
+            case 4 | 1000 | 1200:
+                return RouteType.FERRY
+            case 5:
+                return RouteType.CABLE_TRAM
+            case x if x == 6 or 1300 <= x <= 1307:
+                return RouteType.AERIAL_LIFT
+            case 7 | 1400:
+                return RouteType.FUNICULAR
+            case 11 | 800:
+                return RouteType.TROLLEYBUS
+            case 12 | 405:
+                return RouteType.MONORAIL
+            case x if x in (1100, 1700, 1702) or 1500 <= x <= 1507:
+                raise RuntimeError(f"routes.route_type {x} is not supported")
+            case _:
+                raise MalformedGTFSError("routes.route_type not in valid range")
 
     def __str__(self) -> str:
         match self:
@@ -124,6 +167,15 @@ class PickupDropoffType(Enum):
     PHONE_AGENCY = 2
     COORDINATE_WITH_DRIVER = 3
 
+    @staticmethod
+    def from_field(field: str) -> PickupDropoffType:
+        """Convert a string field from a CSV file to a PickupDropoffType."""
+        value = int(field)
+        if 0 <= value <= 3:
+            return PickupDropoffType(value)
+        else:
+            raise MalformedGTFSError("stop_times.pickup_type or stop_times.drop_off_type not in valid range")
+
 
 @dataclass
 class StopTime:
@@ -169,6 +221,15 @@ class TransferType(Enum):
     BY_TRANSFERS_REBOARD = 5
     BY_NODE_ID = -1
     BY_PARENT_STATION = -2
+
+    @staticmethod
+    def from_field(field: str) -> TransferType:
+        """Convert a string field from a CSV file to a TransferType."""
+        value = int(field)
+        if 0 <= value <= 5:
+            return TransferType(value)
+        else:
+            raise MalformedGTFSError("transfers.transfer_type not in valid range")
 
 
 @dataclass

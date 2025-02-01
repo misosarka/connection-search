@@ -50,10 +50,10 @@ class Dataset:
             stop_times, lambda stop_time: stop_time.stop_id, lambda stop_time: stop_time.departure_time % timedelta(days=1)
         )
 
-        calendar = self._read_csv_file("calendar", self._to_calendar_record)
+        calendar = self._read_optional_csv_file("calendar", self._to_calendar_record)
         self._calendar_by_service_id = self._index_by(calendar, lambda record: record.service_id)
 
-        calendar_dates = self._read_csv_file("calendar_dates", self._to_calendar_dates_record)
+        calendar_dates = self._read_optional_csv_file("calendar_dates", self._to_calendar_dates_record)
         self._calendar_dates_by_service_id = self._index_by(calendar_dates, lambda record: (record.service_id, record.date))
 
     def _read_csv_file[T](self, name: str, to_object: Callable[[dict[str, str]], T | None]) -> list[T]:
@@ -66,7 +66,7 @@ class Dataset:
             and returning an object representing this row, or None to discard this row.
         """
         dataset_path = self.config["DATASET_PATH"]
-        with open(f"{dataset_path}/{name}.txt", encoding="utf-8", newline="") as csv_file:
+        with open(f"{dataset_path}/{name}.txt", encoding="utf-8-sig", newline="") as csv_file:
             csv_reader = DictReader(csv_file, strict=True)
             return [obj for obj in map(to_object, csv_reader) if obj is not None]
 
@@ -106,7 +106,7 @@ class Dataset:
             _dataset=self,
             stop_id=row["stop_id"],
             stop_name=_get_or_default(row, "stop_name", None),
-            location_type=_get_or_default(row, "location_type", LocationType.STOP_OR_PLATFORM, lambda s: LocationType(int(s))),
+            location_type=_get_or_default(row, "location_type", LocationType.STOP_OR_PLATFORM, LocationType.from_field),
             parent_station=_get_or_default(row, "parent_station", None),
             transfer_node_id=(
                 None if self.config["TRANSFER_MODE"] != "by_node_id"
@@ -120,7 +120,7 @@ class Dataset:
             route_id=row["route_id"],
             route_short_name=_get_or_default(row, "route_short_name", None),
             route_long_name=_get_or_default(row, "route_long_name", None),
-            route_type=RouteType(int(row["route_type"])),
+            route_type=RouteType.from_field(row["route_type"]),
         )
 
     def _to_trip(self, row: dict[str, str]) -> Trip:
@@ -140,8 +140,8 @@ class Dataset:
             arrival_time=_parse_time(row["arrival_time"]),
             departure_time=_parse_time(row["departure_time"]),
             stop_id=row["stop_id"],
-            pickup_type=_get_or_default(row, "pickup_type", PickupDropoffType.REGULAR, lambda s: PickupDropoffType(int(s))),
-            drop_off_type=_get_or_default(row, "drop_off_type", PickupDropoffType.REGULAR, lambda s: PickupDropoffType(int(s))),
+            pickup_type=_get_or_default(row, "pickup_type", PickupDropoffType.REGULAR, PickupDropoffType.from_field),
+            drop_off_type=_get_or_default(row, "drop_off_type", PickupDropoffType.REGULAR, PickupDropoffType.from_field),
         )
 
     def _to_calendar_record(self, row: dict[str, str]) -> CalendarRecord:
@@ -175,7 +175,7 @@ class Dataset:
             _dataset=self,
             from_stop_id=row["from_stop_id"],
             to_stop_id=row["to_stop_id"],
-            transfer_type=_get_or_default(row, "transfer_type", TransferType.BY_TRANSFERS_UNTIMED, lambda s: TransferType(int(s))),
+            transfer_type=_get_or_default(row, "transfer_type", TransferType.BY_TRANSFERS_UNTIMED, TransferType.from_field),
             transfer_time=transfer_time,
         )
 
@@ -267,7 +267,7 @@ def _parse_time(time_str: str) -> timedelta:
 
 def _parse_date(date_str: str) -> date:
     """Parse a date string in YYYYMMDD format."""
-    y, m, d = map(int, (date_str[:3], date_str[4:5], date_str[6:]))
+    y, m, d = map(int, (date_str[:4], date_str[4:6], date_str[6:]))
     return date(year=y, month=m, day=d)
 
 

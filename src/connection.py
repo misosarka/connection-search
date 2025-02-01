@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time
-from functools import total_ordering
+from functools import cached_property, total_ordering
 from .structures import Route, Stop, StopTime, Transfer, Trip
 
 
@@ -158,7 +158,7 @@ class Connection:
         trip_segments = sum(1 for segment in self.segments if isinstance(segment, TripConnectionSegment))
         return max(trip_segments - 1, 0)
     
-    @property
+    @cached_property
     def quality(self) -> ConnectionQuality:
         return ConnectionQuality(first_departure=self.first_departure, transfer_count=self.transfer_count)
 
@@ -185,6 +185,6 @@ class OpenConnection:
     def transfer_count(self) -> int:
         return sum(1 for segment in self.segments if isinstance(segment, TripConnectionSegment))
     
-    @property
+    @cached_property
     def quality(self) -> ConnectionQuality:
         return ConnectionQuality(first_departure=self.first_departure, transfer_count=self.transfer_count)
