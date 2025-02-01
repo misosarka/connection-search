@@ -1,6 +1,6 @@
 CONFIG = {
     # Path to the dataset folder, relative to this file, with no leading or trailing slashes.
-    "DATASET_PATH": "data/pid",
+    "DATASET_PATH": "data-example",
 
     # The maximum time the algorithm will search through before giving up, in hours.
     "MAX_SEARCH_TIME_HOURS": 24,
@@ -27,5 +27,5 @@ CONFIG = {
     "MIN_TRANSFER_TIME": 180,
 
     # If true, the main search function is profiled and the profiling results are saved into profile.prof.
-    "PROFILE": True,
+    "PROFILE": False,
 }
