@@ -231,7 +231,7 @@ class Dataset:
 
     def get_all_transfers_from(self, stop: Stop) -> Iterable[Transfer]:
         """
-        Get all transfers from the dataset by the stop_id of the stop they start on.
+        Get all transfers from the dataset by the stop they start on.
 
         The transfer lookup depends on the "TRANSFER_MODE" value of the configuration.
         """

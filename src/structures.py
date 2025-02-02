@@ -9,10 +9,18 @@ if TYPE_CHECKING:
 
 
 class MalformedGTFSError(Exception):
-    pass
+    """An exception signifying that the GTFS dataset does not comply with the specification."""
 
 
 class LocationType(Enum):
+    """
+    An enumeration for the stops.location_type field.
+
+    Determines what kind of location a Stop object represents - a normal stop or platform, a station
+    containing multiple platforms, an entrance to or exit from a station, a generic node used for
+    pathway linking, or a boarding area on a platform.
+    """
+
     STOP_OR_PLATFORM = 0
     STATION = 1
     ENTRANCE_OR_EXIT = 2
@@ -31,6 +39,13 @@ class LocationType(Enum):
 
 @dataclass
 class Stop:
+    """
+    A single record in the stops.txt file in the GTFS dataset.
+
+    Represents a location where passengers can board and disembark vehicles, some related location
+    (e.g. a station entrance) or a group of locations presented as one station.
+    """
+
     _dataset: Dataset = field(repr=False)
     stop_id: str
     stop_name: str | None
@@ -39,13 +54,25 @@ class Stop:
     transfer_node_id: str | None
 
     def get_all_transfers(self) -> Iterable[Transfer]:
+        """
+        Return all transfers that originate at this stop.
+
+        The transfer lookup depends on the "TRANSFER_MODE" value of the configuration.
+        """
         return self._dataset.get_all_transfers_from(self)
 
     def get_departures(self) -> list[StopTime]:
+        """Return a list of all StopTimes that occur at this stop."""
         return self._dataset.get_stop_times_by_stop_id(self.stop_id)
 
 
 class RouteType(Enum):
+    """
+    An enumeration for the routes.route_type field.
+
+    Represents the mode of transport that this route uses.
+    """
+
     TRAM_LIGHT_RAIL = 0
     METRO_SUBWAY = 1
     RAIL = 2
@@ -61,10 +88,11 @@ class RouteType(Enum):
     def from_field(field: str) -> RouteType:
         """
         Convert a string field from a CSV file to a RouteType.
-        
+
         All values from the standard specification are supported, along with some (but not all) values from
         the Google Transit extension specification.
         """
+
         match int(field):
             case x if x == 0 or 900 <= x <= 906:
                 return RouteType.TRAM_LIGHT_RAIL
@@ -89,9 +117,10 @@ class RouteType(Enum):
             case x if x in (1100, 1700, 1702) or 1500 <= x <= 1507:
                 raise RuntimeError(f"routes.route_type {x} is not supported")
             case _:
-                raise MalformedGTFSError("routes.route_type not in valid range")
+                raise MalformedGTFSError(f"routes.route_type {x} not in valid range")
 
     def __str__(self) -> str:
+        """Get a string representation of this route type."""
         match self:
             case RouteType.TRAM_LIGHT_RAIL | RouteType.CABLE_TRAM:
                 return "tramvaj"
@@ -113,6 +142,12 @@ class RouteType(Enum):
 
 @dataclass
 class Route:
+    """
+    A single record in the routes.txt file in the GTFS dataset.
+
+    Represents a group of trips that are referred to by a common name (e.g. a Metro line or a bus route).
+    """
+
     _dataset: Dataset = field(repr=False)
     route_id: str
     route_short_name: str | None
@@ -120,13 +155,15 @@ class Route:
     route_type: RouteType
 
     def get_route_short_name(self) -> str:
+        """Get a short string representation of this route."""
         if self.route_short_name is not None:
             return self.route_short_name 
         if self.route_long_name is not None:
             return self.route_long_name
         raise MalformedGTFSError("both routes.route_short_name and routes.route_long_name are empty")
-    
+
     def get_route_full_name(self) -> str:
+        """Get a full string representation of this route, including its route type."""
         route_type = str(self.route_type).capitalize()
         if self.route_short_name is None:
             return f"{route_type} ({self.route_long_name})"
@@ -138,6 +175,12 @@ class Route:
 
 @dataclass
 class Trip:
+    """
+    A single record in the trips.txt file in the GTFS dataset.
+
+    Represents a single service running on a specified time and along a specified path according to a schedule.
+    """
+
     _dataset: Dataset = field(repr=False)
     trip_id: str
     route_id: str
@@ -145,6 +188,7 @@ class Trip:
     trip_short_name: str | None
 
     def get_trip_name(self) -> str:
+        """Get a string representation of this trip (or its route, if this trip does not have one)."""
         route_short_name = self._dataset.get_route_by_id(self.route_id).get_route_short_name()
         if self.trip_short_name is not None:
             return f"{self.trip_short_name} ({route_short_name})"
@@ -152,16 +196,26 @@ class Trip:
             return route_short_name
 
     def get_route(self) -> Route:
+        """Get a Route to which this trip belongs."""
         return self._dataset.get_route_by_id(self.route_id)
 
     def get_stop_times(self) -> list[StopTime]:
+        """Return a list of all StopTimes that occur on this trip."""
         return self._dataset.get_stop_times_by_trip_id(self.trip_id)
 
     def runs_on_day(self, service_day: date) -> bool:
+        """Return whether this trip runs on the specified service day."""
         return self._dataset.runs_on_day(self.service_id, service_day)
 
 
 class PickupDropoffType(Enum):
+    """
+    An enumeration for the stop_times.pickup_type and stop_times.drop_off_type fields.
+
+    Represents whether passengers can board and disembark a vehicle on this stop, and if so, what they need
+    to do to achieve that.
+    """
+
     REGULAR = 0
     NOT_AVAILABLE = 1
     PHONE_AGENCY = 2
@@ -179,6 +233,12 @@ class PickupDropoffType(Enum):
 
 @dataclass
 class StopTime:
+    """
+    A single record in the stop_times.txt file in the GTFS dataset.
+
+    Represents a scheduled time when a trip arrives to and departs from a stop.
+    """
+
     _dataset: Dataset = field(repr=False)
     trip_id: str
     stop_sequence: int
@@ -189,14 +249,22 @@ class StopTime:
     drop_off_type: PickupDropoffType
 
     def get_stop(self) -> Stop:
+        """Get a Stop at which this stop time occurs."""
         return self._dataset.get_stop_by_id(self.stop_id)
-    
+
     def get_trip(self) -> Trip:
+        """Get a Trip on which this stop time occurs."""
         return self._dataset.get_trip_by_id(self.trip_id)
 
 
 @dataclass
 class CalendarRecord:
+    """
+    A single record in the calendar.txt file in the GTFS dataset.
+
+    Describes a regular weekly schedule for a service that can be referred to by multiple routes.
+    """
+
     _dataset: Dataset = field(repr=False)
     service_id: str
     weekday_services: dict[int, bool]
@@ -206,6 +274,12 @@ class CalendarRecord:
 
 @dataclass
 class CalendarDatesRecord:
+    """
+    A single record in the calendar_dates.txt file in the GTFS dataset.
+
+    Describes an exception to the regular weekly schedule.
+    """
+
     _dataset: Dataset = field(repr=False)
     service_id: str
     date: date
@@ -213,6 +287,14 @@ class CalendarDatesRecord:
 
 
 class TransferType(Enum):
+    """
+    An enumeration for the transfers.transfer_type field.
+
+    The values starting with BY_TRANSFERS correspond to the allowed values of the field. Additionally,
+    a TransferType can signify that the transfer did not originate from a transfers.txt record, but from
+    a matching node_id (specified in the configuration) or a matching parent station.
+    """
+
     BY_TRANSFERS_UNTIMED = 0
     BY_TRANSFERS_GUARANTEED = 1
     BY_TRANSFERS_TIMED = 2
@@ -234,6 +316,13 @@ class TransferType(Enum):
 
 @dataclass
 class Transfer:
+    """
+    A single record in the transfers.txt file in the GTFS dataset.
+
+    Represents a possible walking connection between two different stops. Can also represent a transfer
+    that is not in transfers.txt - either a transfer by node_id, or by parent_station.
+    """
+
     _dataset: Dataset = field(repr=False)
     from_stop_id: str
     to_stop_id: str
@@ -241,7 +330,9 @@ class Transfer:
     transfer_time: int
 
     def get_from_stop(self) -> Stop:
+        """Get a Stop from which this transfer originates."""
         return self._dataset.get_stop_by_id(self.from_stop_id)
-    
+
     def get_to_stop(self) -> Stop:
+        """Get a Stop to which this transfer leads."""
         return self._dataset.get_stop_by_id(self.to_stop_id)
