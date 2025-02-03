@@ -62,4 +62,4 @@ Konfigurace vyhledávání se provádí v souboru `config.py` v kořenové slož
     - `"none"`: Není možné přestupovat mezi různými zastávkami. *Tento způsob je vhodné využít například pro datovou sadu ŽSR.*
 - `"TRANSFER_NODE_ID"`: Viz možnost `"TRANSFER_MODE": "by_node_id"` výše.
 - `"MIN_TRANSFER_TIME_SECONDS"`: Minimální čas v sekundách nutný k pěšímu přesunu mezi dvěma zastávkami v režimech přestupu `"by_node_id"`, `"by_parent_station"` a `"by_transfers_txt"`. Je-li v režimu `"by_transfers_txt"` v záznamu o přestupu vyplněn minimální čas nutný k přestupu, využije se vyšší z obou hodnot.
-- `"PROFILE"`: Je-li možnost nastavena na `"True"`, běh algoritmu je profilován pomocí knihovny `cProfile` a výsledky jsou uloženy do souboru `profile.prof`.
+- `"PROFILE"`: Je-li možnost nastavena na `True`, běh algoritmu je profilován pomocí knihovny `cProfile` a výsledky jsou uloženy do souboru `profile.prof`.
