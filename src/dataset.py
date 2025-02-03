@@ -21,6 +21,8 @@ class Dataset:
     _stops_by_transfer_node_id: defaultdict[str, list[Stop]] = defaultdict()
     _stops_by_parent_station: defaultdict[str, list[Stop]] = defaultdict()
     _transfers_by_origin_stop_id: defaultdict[str, list[Transfer]] = defaultdict()
+    _routes_by_id: dict[str, Route]
+    _trips_by_id: dict[str, Trip]
     _stop_times_by_trip: defaultdict[str, list[StopTime]]
     _stop_times_by_stop: defaultdict[str, list[StopTime]]
     _calendar_by_service_id: dict[str, CalendarRecord]
