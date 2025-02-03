@@ -10,9 +10,13 @@ from .connection import Connection, OpenConnection
 @dataclass
 class SearchParams:
     """Represents all the parameters the user can set when searching for a connection."""
+
     origin_stop_ids: list[str]
+    """A list of stop_ids for all stops where the connection can possibly start."""
     destination_stop_ids: list[str]
+    """A list of stop_ids for all stops where the connection can possibly end."""
     departure: datetime
+    """The datetime at or after which to search for the connection."""
 
 
 @dataclass
@@ -21,11 +25,22 @@ class SearchResult:
     Represents the result of the search algorithm.
     Currently, this is just a single optional Connection, but it may be extended.
     """
+
     connection: Connection | None
+    """The best connection that was found, or None if no connection was found."""
 
 
 def search(params: SearchParams, dataset: Dataset) -> SearchResult:
-    """Perform the search algorithm with the specified parameters on the specified dataset and return its results."""
+    """
+    Perform the search algorithm with the specified parameters on the specified dataset and return its results.
+
+    Keep a priority queue with all the Visitors ordered by their next event and dictionaries of the best connections
+    to stops and trips that were found so far. For each of the origin stops, enqueue its StopVisitor and also all
+    TransferVisitors for its transfers. Then, in the main loop, dequeue the next Visitor. If its time is different
+    from the previous one, check if a connection was found or the time limit was passed. Then call next() on the Visitor
+    and enqueue all new Visitors returned by the call. If the queue is empty, no connection exists.
+    """
+
     queue: PriorityQueue[Visitor] = PriorityQueue()
     visited_stops: dict[str, Connection] = {}
     visited_trips: dict[str, OpenConnection] = {}
@@ -38,7 +53,7 @@ def search(params: SearchParams, dataset: Dataset) -> SearchResult:
         if origin_visitor is not None:
             queue.put(origin_visitor)
             visited_stops[origin_stop_id] = Connection.empty()
-        
+
         # Create TransferVisitors for transfers directly from the origin stop
         for transfer_visitor in TransferVisitor.create_all(
             dataset.get_stop_by_id(origin_stop_id), params.departure, Connection.empty()
@@ -64,5 +79,5 @@ def search(params: SearchParams, dataset: Dataset) -> SearchResult:
         new_visitors = visitor.next(visited_stops, visited_trips)
         for new_visitor in new_visitors:
             queue.put(new_visitor)
-    
+
     return SearchResult(connection=None)

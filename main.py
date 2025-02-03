@@ -2,6 +2,7 @@ from src.dataset import Dataset
 from src.ui import Ui
 from config import CONFIG
 
-dataset = Dataset(CONFIG)
-ui = Ui(dataset)
-ui.run()
+if __name__ == "__main__":
+    dataset = Dataset(CONFIG)
+    ui = Ui(dataset)
+    ui.run()    

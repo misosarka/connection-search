@@ -214,8 +214,8 @@ class Dataset:
             if unsupported_header in row and row[unsupported_header] != "":
                 return None
         transfer_time = max(
-            self.config["MIN_TRANSFER_TIME"],
-            _get_or_default(row, "min_transfer_time", self.config["MIN_TRANSFER_TIME"], int)
+            self.config["MIN_TRANSFER_TIME_SECONDS"],
+            _get_or_default(row, "min_transfer_time", self.config["MIN_TRANSFER_TIME_SECONDS"], int)
         )
         return Transfer(
             _dataset=self,
@@ -245,7 +245,7 @@ class Dataset:
                     from_stop_id=stop.stop_id,
                     to_stop_id=target_stop.stop_id,
                     transfer_type=TransferType.BY_NODE_ID,
-                    transfer_time=self.config["MIN_TRANSFER_TIME"],
+                    transfer_time=self.config["MIN_TRANSFER_TIME_SECONDS"],
                 ) for target_stop in self._stops_by_transfer_node_id[stop.transfer_node_id])
 
             case "by_parent_station":
@@ -256,7 +256,7 @@ class Dataset:
                     from_stop_id=stop.stop_id,
                     to_stop_id=target_stop.stop_id,
                     transfer_type=TransferType.BY_PARENT_STATION,
-                    transfer_time=self.config["MIN_TRANSFER_TIME"],
+                    transfer_time=self.config["MIN_TRANSFER_TIME_SECONDS"],
                 ) for target_stop in self._stops_by_parent_station[stop.parent_station])
 
             case "by_transfers_txt":
